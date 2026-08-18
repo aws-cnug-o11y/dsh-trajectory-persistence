@@ -29,6 +29,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# pnpm local store (created when the store dir is overridden locally)
+.pnpm-store/
+
 # Test / coverage output
 coverage/
 *.tsbuildinfo

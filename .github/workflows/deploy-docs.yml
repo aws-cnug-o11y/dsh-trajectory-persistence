@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read # actions/checkout 需要（显式声明 permissions 时未列出的权限全部归零）
+  contents: read # required by actions/checkout (with explicit permissions, unlisted scopes default to none)
   pages: write
   id-token: write
 

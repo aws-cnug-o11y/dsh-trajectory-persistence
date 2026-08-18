@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/dsh-trajectory-persistence)](https://www.npmjs.com/package/dsh-trajectory-persistence)
 [![docs](https://img.shields.io/badge/docs-aws--cnug--o11y.github.io-blue)](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/)
 [![license](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![CI](https://github.com/aws-cnug-o11y/dsh-trajectory-persistence/actions/workflows/ci.yml/badge.svg)](https://github.com/aws-cnug-o11y/dsh-trajectory-persistence/actions/workflows/ci.yml)
 
 Trajectory persistence plugin for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
 Observe-only: it never writes to a session — it persists every session's
@@ -66,6 +67,7 @@ Full guides live on the [documentation site](https://aws-cnug-o11y.github.io/dsh
 - [OTel GenAI Sink](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/otel-sink) — event → span mapping, Jaeger / Collector / Langfuse
 - [AWS CloudWatch & AgentCore](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/aws-cloudwatch) — SigV4 delivery, Transaction Search
 - [Development](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/development) — build/test, sink architecture, adding a sink
+- [Changelog](./CHANGELOG.md) — release history
 
 ## Compatibility
 
