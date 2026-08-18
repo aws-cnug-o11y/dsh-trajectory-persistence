@@ -49,7 +49,8 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "prepublishOnly": "pnpm build && pnpm test"
+    "prepublishOnly": "pnpm build && pnpm test",
+    "prepare": "tsc -p tsconfig.json"
   },
   "dsh": {
     "bundle": {
