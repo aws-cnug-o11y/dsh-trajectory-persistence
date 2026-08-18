@@ -42,6 +42,9 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "prepublishOnly": "pnpm build && pnpm test"
   },
   "dsh": {
@@ -78,6 +81,7 @@
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0",
+    "vitepress": "^1.6.4",
     "vitest": "^3.0.0"
   },
   "engines": {

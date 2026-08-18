@@ -1,5 +1,7 @@
 # dsh-trajectory-persistence
 
+[![Documentation](https://img.shields.io/badge/docs-aws--cnug--o11y.github.io-blue)](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/)
+
 Trajectory persistence plugin for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
 An observe-only cordis plugin that subscribes to the session event firehose
 (`session/event` / `session/created` / `session/flush` / `session/disposed`)
@@ -417,3 +419,21 @@ Layout:
   trajectory has been uploaded (or dead-lettered after exhausting retries).
   Turn latency is unaffected — only the checkpoint itself waits.
 - Requires Node.js ≥ 22 (matching the harness).
+
+## Documentation
+
+The full documentation site lives at
+<https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/>:
+
+- [Getting Started](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/getting-started) — install, first trace with a local Jaeger
+- [Configuration Reference](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/configuration) — every field, defaults, validation rules, hot-reload
+- [S3 / OSS Sink](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/s3-sink) — JSONL part layout, ring buffer, retry & dead-letter
+- [OTel GenAI Sink](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/otel-sink) — event → span mapping, Jaeger / Collector / Langfuse
+- [AWS CloudWatch & AgentCore](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/aws-cloudwatch) — SigV4 delivery, China endpoints, Transaction Search
+- [Development](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/development) — build/test, sink architecture, adding a sink
+
+The site is built with [VitePress](https://vitepress.dev) from `docs/`
+(`pnpm docs:dev` / `pnpm docs:build`) and deployed by
+`.github/workflows/deploy-docs.yml` on every push to `main` that touches
+`docs/**`. Repository admins: under **Settings → Pages**, set **Source** to
+**GitHub Actions** for the deployment to go live.
