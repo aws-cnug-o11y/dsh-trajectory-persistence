@@ -1,5 +1,13 @@
 # S3
 
+::: info This page describes `mode: 'push'`
+The S3 sink has two delivery modes. This page covers **push** — the default,
+legacy-but-supported mode that buffers live session events and uploads JSONL
+part files. For **ship** mode (tailing the official on-disk artifact, zstd
+frame segments + manifest, and restoring sessions with `sync-down`), see
+[Ship & Sync](/guide/ship-sync).
+:::
+
 Minimal configuration to start persisting trajectories to AWS S3 (credentials
 fall back to the AWS default provider chain when omitted):
 

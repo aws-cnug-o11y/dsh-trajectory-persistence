@@ -34,6 +34,7 @@ function entryConfig(): Config {
     sinks: {
       s3: {
         enabled: false,
+        mode: 'push',
         bucket: '',
         prefix: 'dsh-trajectories',
         region: 'us-east-1',
@@ -42,6 +43,11 @@ function entryConfig(): Config {
         maxRetries: 0,
         retryBaseDelayMs: 1,
         deadLetterDir: '/nonexistent-deadletter',
+        root: '/nonexistent-sessions',
+        pollIntervalMs: 5_000,
+        segmentBytes: 262_144,
+        segmentMaxDelayMs: 60_000,
+        dormantAfterMs: 300_000,
       },
       otel: {
         enabled: false,

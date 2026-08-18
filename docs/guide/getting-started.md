@@ -9,10 +9,14 @@ firehose (`session/created` / `session/event` / `session/flush` /
 `session/disposed`) and persists every session's trajectory to two
 **independently toggleable** sinks:
 
-- **S3 / OSS sink** — JSONL part files compatible with the
+- **S3 / OSS sink** — two delivery modes: `push` (default, legacy) uploads
+  JSONL part files compatible with the
   `@deepseek-ai/dsh-session-persistence-jsonl` artifact layout (header line +
   one event per line), with a bounded in-memory ring buffer, batch uploads,
-  exponential-backoff retry, and a local dead-letter directory.
+  exponential-backoff retry, and a local dead-letter directory; `ship` tails
+  the official jsonl backend's on-disk artifact read-only and uploads zstd
+  frame segments plus a per-session manifest — restorable on another machine
+  with the bundled `sync-down` CLI (see [Ship & Sync](/guide/ship-sync)).
 - **OTel GenAI sink** — spans following the
   [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/),
   exported over OTLP HTTP/protobuf straight to Jaeger, to an OTel Collector,

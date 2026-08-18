@@ -33,15 +33,52 @@ export const namespace = settingsNamespace('trajectory-persistence')
 export { Config, validateConfig }
 export type { Config as TrajectoryPersistenceConfig } from './config.js'
 export { TrajectorySinks } from './sinks.js'
-export type { SinkFactories, TrajectoryStatus } from './sinks.js'
+export type { S3Sink, S3Stats, SinkFactories, TrajectoryStatus } from './sinks.js'
 export { S3TrajectorySink, EventBuffer, createS3Uploader } from './s3-sink.js'
 export type { ObjectUploader, S3SinkStats } from './s3-sink.js'
+export { S3ShipperSink, createS3ObjectStore } from './shipper.js'
+export type { ShipperStats, S3ObjectStore, S3ObjectStoreConfig } from './shipper.js'
+export { syncDown } from './sync-down.js'
+export type {
+  ListableObjectStore,
+  SessionSyncResult,
+  SyncDownOptions,
+  SyncDownStatus,
+  SyncDownSummary,
+} from './sync-down.js'
 export { OtelTrajectorySink, GenAISpanMapper } from './otel-sink.js'
 export type { OtelSinkStats } from './otel-sink.js'
 export { SigV4OtlpTraceExporter, defaultAwsOtlpUrl } from './sigv4-otlp-exporter.js'
 export type { SigV4Credentials, SigV4OtlpTraceExporterConfig } from './sigv4-otlp-exporter.js'
 export { withRetry } from './retry.js'
 export { toHeaderLine, encodeSegment, projectKey, serializePart } from './jsonl.js'
+export { scanZstdFrames } from './zstd-scan.js'
+export type { ZstdFrameRange, ZstdFrameScan } from './zstd-scan.js'
+export {
+  MANIFEST_VERSION,
+  ManifestError,
+  segmentKey,
+  manifestKey,
+  parseManifest,
+  serializeManifest,
+  readManifest,
+  writeManifest,
+  updateManifest,
+  getOrCreateWriterId,
+} from './manifest.js'
+export type { ManifestSegment, ShipManifest, ObjectStore } from './manifest.js'
+export {
+  SHIP_STATE_FILE,
+  defaultShipStateDir,
+  initialSessionState,
+  loadShipState,
+  saveShipState,
+  getSessionState,
+  updateSessionState,
+  advanceSessionOffset,
+} from './ship-state.js'
+export type { SessionShipState, ShipState } from './ship-state.js'
+export type { S3SinkMode } from './config.js'
 
 export function apply(ctx: Context, config: Config) {
   // Invalid composed config (e.g. a sink enabled without its bucket/url)

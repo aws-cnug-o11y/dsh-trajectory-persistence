@@ -13,17 +13,26 @@ import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Config, OtelSinkConfig, S3SinkConfig } from './config.js'
 import { S3TrajectorySink } from './s3-sink.js'
 import type { S3SinkStats } from './s3-sink.js'
+import { S3ShipperSink } from './shipper.js'
+import type { ShipperStats } from './shipper.js'
 import { OtelTrajectorySink } from './otel-sink.js'
 import type { OtelSinkStats } from './otel-sink.js'
 
+/** The s3 sink in either delivery mode: event-driven push, or artifact-tailing ship. */
+export type S3Sink = S3TrajectorySink | S3ShipperSink
+/** Stats of the s3 sink in either mode (`ShipperStats.mode` discriminates). */
+export type S3Stats = S3SinkStats | ShipperStats
+
 /** Construction seam for the two sinks — the default builds the real sinks; tests inject mocks. */
 export interface SinkFactories {
-  s3: (ctx: Context, config: S3SinkConfig) => S3TrajectorySink
+  s3: (ctx: Context, config: S3SinkConfig) => S3Sink
   otel: (ctx: Context, config: OtelSinkConfig) => OtelTrajectorySink
 }
 
 const defaultFactories: SinkFactories = {
-  s3: (ctx, config) => new S3TrajectorySink(ctx, config),
+  s3: (ctx, config) => config.mode === 'ship'
+    ? new S3ShipperSink(ctx, config)
+    : new S3TrajectorySink(ctx, config),
   otel: (ctx, config) => new OtelTrajectorySink(ctx, config),
 }
 
@@ -36,14 +45,14 @@ function sameConfig(a: unknown, b: unknown): boolean {
 export type SinkStatus<T> = ({ enabled: true } & T) | { enabled: false }
 
 export interface TrajectoryStatus {
-  s3: SinkStatus<S3SinkStats>
+  s3: SinkStatus<S3Stats>
   otel: SinkStatus<OtelSinkStats>
 }
 
 export class TrajectorySinks {
   private readonly logger
   private readonly factories: SinkFactories
-  private s3?: S3TrajectorySink
+  private s3?: S3Sink
   private otel?: OtelTrajectorySink
   private s3Config?: S3SinkConfig
   private otelConfig?: OtelSinkConfig
@@ -164,22 +173,35 @@ export class TrajectorySinks {
   }
 
   /** Close a replaced sink in the background; close() drains its buffered events first. */
-  private drain(sink: S3TrajectorySink | OtelTrajectorySink, kind: string): void {
+  private drain(sink: S3Sink | OtelTrajectorySink, kind: string): void {
     void sink.close().catch((error: unknown) => {
       this.logger.warn(`draining the replaced ${kind} sink failed: ${String(error)}`)
     })
   }
 }
 
-function formatS3(status: SinkStatus<S3SinkStats>): string {
+function formatS3(status: SinkStatus<S3Stats>): string {
   if (!status.enabled) return 's3 sink: disabled'
+  if ('mode' in status && status.mode === 'ship') {
+    const lines = [
+      's3 sink: enabled (mode: ship)',
+      `  tracked sessions: ${status.trackedSessions} (${status.dormantSessions} dormant)`,
+      `  uploaded segments: ${status.uploadedSegments}, bytes: ${status.uploadedBytes}`,
+      `  pending lag: ${status.lagBytes} bytes`,
+      `  conflicted sessions: ${status.conflicted.length === 0 ? 'none' : status.conflicted.join(', ')}`,
+      `  last upload: ${status.lastUploadAt === undefined ? 'never' : new Date(status.lastUploadAt).toISOString()}`,
+    ]
+    if (status.lastError !== undefined) lines.push(`  last error: ${status.lastError}`)
+    return lines.join('\n')
+  }
+  const push = status as SinkStatus<S3SinkStats> & { enabled: true }
   const lines = [
-    's3 sink: enabled',
-    `  uploaded parts: ${status.uploadedParts}, dead-lettered: ${status.deadLetteredParts}`,
-    `  sessions: ${status.sessions}, buffered events: ${status.bufferedEvents}, dropped by overflow: ${status.droppedEvents}`,
-    `  last upload: ${status.lastUploadAt === undefined ? 'never' : new Date(status.lastUploadAt).toISOString()}`,
+    's3 sink: enabled (mode: push)',
+    `  uploaded parts: ${push.uploadedParts}, dead-lettered: ${push.deadLetteredParts}`,
+    `  sessions: ${push.sessions}, buffered events: ${push.bufferedEvents}, dropped by overflow: ${push.droppedEvents}`,
+    `  last upload: ${push.lastUploadAt === undefined ? 'never' : new Date(push.lastUploadAt).toISOString()}`,
   ]
-  if (status.lastError !== undefined) lines.push(`  last error: ${status.lastError}`)
+  if (push.lastError !== undefined) lines.push(`  last error: ${push.lastError}`)
   return lines.join('\n')
 }
 
