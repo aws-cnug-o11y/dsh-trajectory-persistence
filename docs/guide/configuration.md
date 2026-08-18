@@ -3,6 +3,34 @@
 All configuration lives under the plugin's `config` key, in two independently
 toggleable sinks. Both default to **disabled**.
 
+## Where config lives
+
+Two layers compose into the effective config:
+
+1. **Profile `cordis.patch.yml` layers** — `dsh plugin add` applies the
+   shipped bundle patch, which inserts one inert row; a profile layer then
+   replaces that row with its `config` (later layers replace a row's whole
+   config, so restate the full block):
+
+   ```yaml
+   # $DSH_HOME/profiles/<your-profile>/cordis.patch.yml
+   - replace:
+       - id: trajectory-persistence
+         name: dsh-trajectory-persistence
+         config:
+           sinks:
+             s3:
+               enabled: true
+               bucket: my-bucket
+   ```
+
+2. **`$DSH_HOME/settings.yaml`** — deep-merges on top of the composed config
+   under the `trajectory-persistence` namespace and applies **live, without a
+   restart**; see [Hot-reload behavior](#hot-reload-behavior). Restate only
+   the keys you change.
+
+The annotated default below is what every field falls back to:
+
 ```yaml
 config:
   sinks:
@@ -52,7 +80,7 @@ config:
 | `batchSize` | integer ≥ 1 | `100` | Push mode: flush a session's buffer once it holds at least this many events. |
 | `maxBufferedEvents` | integer ≥ 1 | `10000` | Push mode: upper bound of buffered events per session; oldest events are dropped (with a warning) beyond it. |
 | `maxRetries` | integer ≥ 0 | `3` | Retries after the first upload attempt (exponential backoff). |
-| `retryBaseDelayMs` | integer ≥ 0 | `200` | Base backoff delay; retry `n` waits `retryBaseDelayMs * 2^(n-1)` plus 25 % jitter. |
+| `retryBaseDelayMs` | integer ≥ 0 | `200` | Base backoff delay; retry `n` waits `retryBaseDelayMs * 2^(n-1)` plus up to 25 % jitter. |
 | `deadLetterDir` | string | `.dsh/trajectory-deadletter` | Push mode: local directory receiving parts whose upload finally failed. |
 | `root` | string | `$DSH_HOME/sessions` (or `~/.dsh/sessions`) | Ship mode: root directory of the official jsonl backend's session artifacts. **Required in ship mode.** |
 | `pollIntervalMs` | integer ≥ 1 | `5000` | Ship mode: poll interval for artifact growth, in milliseconds. |
@@ -115,7 +143,7 @@ trajectory-persistence:
   sinks:
     s3:
       enabled: true
-      bucket: my-trajectory-bucket
+      bucket: my-bucket
 ```
 
 Every committed change applies **live, without a restart**:

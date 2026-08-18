@@ -1,29 +1,34 @@
-# S3
+# S3 Sink
 
 ::: info This page describes `mode: 'push'`
-The S3 sink has two delivery modes. This page covers **push** — the default,
-legacy-but-supported mode that buffers live session events and uploads JSONL
-part files. For **ship** mode (tailing the official on-disk artifact, zstd
-frame segments + manifest, and restoring sessions with `sync-down`), see
-[Ship & Sync](/guide/ship-sync).
+The S3 sink has two delivery modes. This page covers `mode: 'push'` — the
+default, legacy-but-supported mode that buffers the live event stream and
+uploads JSONL part files. For `mode: 'ship'` (tailing the official on-disk
+artifact, zstd frame segments + `_manifest.json`, restoring sessions with
+`sync-down`), see [Ship & Sync](/guide/ship-sync).
 :::
 
-Minimal configuration to start persisting trajectories to AWS S3 (credentials
-fall back to the AWS default provider chain when omitted):
+In push mode the S3 sink persists each session's trajectory as JSONL **part
+files** to AWS S3 or any S3-compatible object store (Aliyun OSS, MinIO, …),
+byte-compatible with the `@deepseek-ai/dsh-session-persistence-jsonl` artifact
+layout. A bounded per-session buffer flushes on the harness's durability
+checkpoints, uploads retry with exponential backoff, and a part whose upload
+finally fails lands in a local dead-letter directory.
+
+## Minimal configuration
 
 ```yaml
 config:
   sinks:
     s3:
       enabled: true
-      bucket: dsh-trajectories
-      prefix: trajectories
+      mode: push          # the default; shown for clarity
+      bucket: my-bucket
       region: us-east-1
 ```
 
-The S3 sink persists each session's trajectory as JSONL **part files** to AWS
-S3 or any S3-compatible object store (Aliyun OSS, MinIO, …), byte-compatible
-with the `@deepseek-ai/dsh-session-persistence-jsonl` artifact layout.
+Omit `credentials` to use the AWS default provider chain. The full field table
+lives in the [Configuration Reference](/guide/configuration#sinks-s3).
 
 ## Part layout
 
@@ -65,9 +70,9 @@ remote-only sink must not require.
 
 ## Buffering and flush triggers
 
-Each session gets a bounded in-memory buffer (`EventBuffer`) with ring
-(drop-oldest) overflow semantics. A flush uploads the buffered events as one
-part and is triggered by:
+Each session gets a bounded in-memory buffer with ring (drop-oldest) overflow
+semantics. A flush uploads the buffered events as one part and is triggered
+by:
 
 1. the `session/flush` event (the harness's durability checkpoint — the
    listener returns the upload promise, so a settled checkpoint means the
@@ -78,14 +83,14 @@ part and is triggered by:
 
 Flushes normally happen at `batchSize`, long before the cap;
 `maxBufferedEvents` only bounds memory when uploads stall. Events evicted by
-overflow are counted (`dropped by overflow` in `/trajectory-status`) and logged
-with a warning.
+overflow are counted (`dropped by overflow` in `/trajectory-status`) and
+logged with a warning.
 
 ## Retry and dead-letter
 
 Uploads are serialized per session (parts never race each other) and retried
 `maxRetries` times after the first attempt with exponential backoff: retry `n`
-waits `retryBaseDelayMs * 2^(n-1)` plus 25 % jitter.
+waits `retryBaseDelayMs * 2^(n-1)` plus up to 25 % jitter.
 
 A part that still fails after all retries is written **verbatim** to the local
 dead-letter directory, under the same key structure:
@@ -110,7 +115,7 @@ config:
   sinks:
     s3:
       enabled: true
-      bucket: dsh-trajectories
+      bucket: my-bucket
       prefix: trajectories
       region: oss-cn-hangzhou
       endpoint: https://oss-cn-hangzhou.aliyuncs.com
@@ -121,5 +126,16 @@ config:
 ```
 
 MinIO is the same shape: `endpoint: http://minio:9000`, `forcePathStyle: true`.
-See the [Configuration Reference](/guide/configuration#sinks-s3) for every
-field and its default.
+
+## Troubleshooting
+
+- **Parts not arriving** — run `/trajectory-status` and check `last error`,
+  `uploaded parts`, and `dead-lettered`. A growing dead-letter count means the
+  backend rejected the uploads after all retries; the parts are recoverable
+  under `deadLetterDir` and can be re-uploaded manually once the cause is
+  fixed.
+- **`buffer overflow dropped N events` warnings** — uploads are stalling and
+  the ring cap is evicting the oldest events. Check connectivity/credentials,
+  or raise `maxBufferedEvents` to buy memory headroom.
+- **Need restorable sessions instead of analytics parts** — that is
+  `mode: 'ship'`; see [Ship & Sync](/guide/ship-sync).

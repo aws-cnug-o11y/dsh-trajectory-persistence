@@ -12,6 +12,10 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Configuration', link: '/guide/configuration' },
       {
+        text: 'npm',
+        link: 'https://www.npmjs.com/package/dsh-trajectory-persistence',
+      },
+      {
         text: 'GitHub',
         link: 'https://github.com/aws-cnug-o11y/dsh-trajectory-persistence',
       },
@@ -28,8 +32,8 @@ export default defineConfig({
       {
         text: 'Sinks',
         items: [
-          { text: 'S3', link: '/guide/s3-sink' },
           { text: 'Ship & Sync', link: '/guide/ship-sync' },
+          { text: 'S3 (push mode)', link: '/guide/s3-sink' },
           { text: 'OTel GenAI Sink', link: '/guide/otel-sink' },
           { text: 'AWS CloudWatch & AgentCore', link: '/guide/aws-cloudwatch' },
         ],

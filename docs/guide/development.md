@@ -5,7 +5,7 @@
 ```sh
 pnpm install
 pnpm build      # tsc -> lib/
-pnpm test       # vitest: span mapping, S3 buffering/flush triggers, retry
+pnpm test       # vitest: span mapping, s3 push buffering/flush, shipper, sync-down, retry
 ```
 
 Requires Node.js ≥ 22 (matching the harness).

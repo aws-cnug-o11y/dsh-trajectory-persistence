@@ -3,7 +3,11 @@
 Instead of a plain OTLP endpoint, the otel sink can sign each batch with
 **AWS Signature Version 4** and POST it straight to the
 [CloudWatch OTLP endpoint](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-OTLPEndpoint.html)
-— the same ingest path Bedrock AgentCore Observability uses.
+— the same ingest path Bedrock AgentCore Observability uses. No collector or
+sidecar is required, and credentials come from the AWS default provider
+chain.
+
+## Minimal configuration
 
 ```yaml
 config:
@@ -16,6 +20,10 @@ config:
                         # (e.g. https://xray.cn-north-1.amazonaws.com.cn/v1/traces)
         # service: ~  # SigV4 service name override; defaults to xray
 ```
+
+`aws` is mutually exclusive with `url` (it already implies its endpoint), and
+`aws.region` is required. The full field table lives in the
+[Configuration Reference](/guide/configuration#sinks-otel-aws).
 
 ## Endpoint facts
 
@@ -81,13 +89,9 @@ To see them:
    model (`gen_ai.request.model`) and token usage (`gen_ai.usage.*`) from the
    [event → span mapping](/guide/otel-sink#event-genai-span-mapping).
 
-## Validation rules
+## Notes
 
-- `aws` is **mutually exclusive** with `url` (`aws` already implies its
-  endpoint).
-- `aws.region` is **required** when `aws` delivery is configured.
-- Extra entries in `sinks.otel.headers` are merged into the signed request as
-  usual (custom headers win on conflict).
-
-See the [Configuration Reference](/guide/configuration#sinks-otel-aws) for the
-field table.
+- Extra entries in `sinks.otel.headers` are merged into the signed request
+  (custom headers win on conflict).
+- Export failures surface in the plugin's logs; a non-2xx response includes
+  the first 512 bytes of the AWS error body.

@@ -6,13 +6,28 @@ and exports them over OTLP HTTP/protobuf — straight to Jaeger, to an OTel
 Collector (which can land them in ClickHouse, …), to Langfuse, or
 [SigV4-signed to AWS CloudWatch / AgentCore Observability](/guide/aws-cloudwatch).
 
+## Minimal configuration
+
+```yaml
+config:
+  sinks:
+    otel:
+      enabled: true
+      url: http://localhost:4318/v1/traces
+```
+
+`url` is the full OTLP HTTP/protobuf traces endpoint; `aws` replaces it for
+[SigV4 delivery](/guide/aws-cloudwatch) (the two are mutually exclusive). The
+full field table lives in the
+[Configuration Reference](/guide/configuration#sinks-otel).
+
 ## Event → GenAI span mapping
 
 | dsh session events | span | key attributes |
 |---|---|---|
-| `turn/start` … `turn/end` | `gen_ai.turn` | `gen_ai.operation.name=turn`, `gen_ai.conversation.id=<sessionId>` |
-| `step/start` … `step/end` + `assistant/message` + `assistant/chunk` | `chat` (child of turn) | `gen_ai.operation.name=chat`, `gen_ai.request.model` (from the latest `request/context`), `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` (from `assistant/message.usage`), chunk aggregation in `dsh.assistant.*` |
-| `tool/call` … `tool/result` (paired by `callId`) | `execute_tool` (child of the step's chat span) | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `gen_ai.tool.call.arguments` (truncated at 8192 characters); failures (`error` or `isError`) set span status `ERROR` |
+| `turn/start` … `turn/end` | `gen_ai.turn` | `gen_ai.operation.name=turn`, `gen_ai.conversation.id=<sessionId>`, `dsh.turn`, `dsh.turn.end_reason` at close |
+| `step/start` … `step/end` + `assistant/message` + `assistant/chunk` | `chat` (child of turn) | `gen_ai.operation.name=chat`, `gen_ai.request.model` / `gen_ai.provider.name` (from the latest `request/context`), `gen_ai.usage.input_tokens` / `gen_ai.usage.output_tokens` (from `assistant/message.usage`, plus `gen_ai.usage.cache_read.input_tokens` / `gen_ai.usage.cache_creation.input_tokens` when reported), chunk aggregation in `dsh.assistant.*` |
+| `tool/call` … `tool/result` (paired by `callId`) | `execute_tool` (child of the step's chat span) | `gen_ai.tool.name`, `gen_ai.tool.call.id`, `gen_ai.tool.call.arguments` (truncated at 8192 bytes); failures (`error` or `isError`) set span status `ERROR` and `error.type` |
 
 Defensive close-out rules:
 
@@ -28,10 +43,13 @@ Two mapping caveats to be aware of:
 - Usage attributes (`gen_ai.usage.input_tokens` / `output_tokens`) appear only
   when the adapter reported usage on `assistant/message`.
 
+## Batching and resource attributes
+
 Export batching is the standard OTel `BatchSpanProcessor` — tune it with
-`maxExportBatchSize` and `scheduledDelayMillis`; `shutdownTimeoutMillis` caps
-the drain on dispose. All exported spans carry
-`service.name = <serviceName>` (`dsh-trajectory-persistence` by default).
+`maxExportBatchSize` and `scheduledDelayMillis`. `shutdownTimeoutMillis` caps
+both a single export attempt and the drain on dispose. All exported spans
+carry `service.name = <serviceName>` (`dsh-trajectory-persistence` by
+default).
 
 ## Backends
 
@@ -60,32 +78,17 @@ service. Full walkthrough: [Getting Started](/guide/getting-started#first-trace-
 
 ### OTel Collector → ClickHouse
 
-Point the plugin at the collector:
-
-```yaml
-config:
-  sinks:
-    otel:
-      enabled: true
-      url: http://localhost:4318/v1/traces
-```
-
-Collector configuration (`otel-collector.yml`), using the
+Point the plugin at the collector (`url: http://localhost:4318/v1/traces`) and
+configure the collector with the
 [ClickHouse exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/clickhouseexporter):
 
 ```yaml
+# otel-collector.yml
 receivers:
   otlp:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
-      grpc:
-        endpoint: 0.0.0.0:4317
-
-processors:
-  batch:
-    send_batch_size: 1000
-    timeout: 5s
 
 exporters:
   clickhouse:
@@ -97,7 +100,6 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
       exporters: [clickhouse]
 ```
 
@@ -119,8 +121,7 @@ ORDER BY output_tokens DESC;
 ### Langfuse
 
 Langfuse ingests OTLP traces at `/api/public/otel/v1/traces` with Basic auth
-built from your public/secret key pair (the standard
-endpoint + `Authorization` header pattern of Langfuse's OTLP integration):
+built from your public/secret key pair:
 
 ```yaml
 config:
