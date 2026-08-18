@@ -8,17 +8,24 @@ config:
   sinks:
     s3:
       enabled: false                    # master switch
+      mode: push                        # 'push' (event stream) | 'ship' (tail on-disk artifact)
       bucket: ''                        # required when enabled
       prefix: dsh-trajectories          # key prefix
       region: us-east-1                 # signing region
       endpoint: ~                       # S3-compatible endpoint (OSS, MinIO)
       forcePathStyle: ~                 # path-style addressing (MinIO, OSS)
       credentials: ~                    # { accessKeyId, secretAccessKey }; absent = AWS default chain
-      batchSize: 100                    # flush trigger: buffered events per session
-      maxBufferedEvents: 10000          # ring cap; oldest dropped with a warning beyond it
+      batchSize: 100                    # push: flush trigger, buffered events per session
+      maxBufferedEvents: 10000          # push: ring cap; oldest dropped with a warning beyond it
       maxRetries: 3                     # retries after the first attempt
       retryBaseDelayMs: 200             # backoff base (retry n waits base * 2^(n-1) + jitter)
-      deadLetterDir: .dsh/trajectory-deadletter
+      deadLetterDir: .dsh/trajectory-deadletter  # push: parts whose upload finally failed
+      root: ~/.dsh/sessions             # ship: official jsonl backend's session root ($DSH_HOME/sessions)
+      pollIntervalMs: 5000              # ship: poll interval for artifact growth
+      segmentBytes: 262144              # ship: target segment size (never splits a zstd frame)
+      segmentMaxDelayMs: 60000          # ship: ship a short segment after this without growth
+      dormantAfterMs: 300000            # ship: dormant after this without change
+      writerId: ~                       # ship: stable writer identity override
     otel:
       enabled: false
       url: ''                           # full OTLP traces endpoint, e.g. http://jaeger:4318/v1/traces (mutually exclusive with aws)
@@ -35,17 +42,24 @@ config:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | boolean | `false` | Master switch for this sink. |
+| `mode` | `'push' \| 'ship'` | `'push'` | Delivery mode: `push` buffers live events and uploads JSONL parts (legacy, default — see [S3](/guide/s3-sink)); `ship` tails the official jsonl backend's on-disk artifact and uploads zstd frame segments (see [Ship & Sync](/guide/ship-sync)). |
 | `bucket` | string | `''` | Target bucket. **Required when enabled.** |
-| `prefix` | string | `dsh-trajectories` | Key prefix; parts land at `{prefix}/{projectId}/{sessionId}/{seqStart}-{seqEnd}.jsonl`. |
+| `prefix` | string | `dsh-trajectories` | Key prefix; push parts land at `{prefix}/{projectId}/{sessionId}/{seqStart}-{seqEnd}.jsonl`, ship segments at `{prefix}/{projectDir}/{sessionId}/{offsetStart}-{offsetEnd}.jsonl.zstd`. |
 | `region` | string | `us-east-1` | AWS region (or the endpoint's signing region for S3-compatible stores). |
 | `endpoint` | string? | — | Custom endpoint for S3-compatible object stores (Aliyun OSS, MinIO, …). |
 | `forcePathStyle` | boolean? | — | Path-style addressing — required by MinIO and most OSS-compatible endpoints. |
 | `credentials` | object? | — | `{ accessKeyId, secretAccessKey }` (both required if the object is present). Absent means the AWS default provider chain (env, shared config, IAM role). |
-| `batchSize` | integer ≥ 1 | `100` | Flush a session's buffer once it holds at least this many events. |
-| `maxBufferedEvents` | integer ≥ 1 | `10000` | Upper bound of buffered events per session; oldest events are dropped (with a warning) beyond it. |
+| `batchSize` | integer ≥ 1 | `100` | Push mode: flush a session's buffer once it holds at least this many events. |
+| `maxBufferedEvents` | integer ≥ 1 | `10000` | Push mode: upper bound of buffered events per session; oldest events are dropped (with a warning) beyond it. |
 | `maxRetries` | integer ≥ 0 | `3` | Retries after the first upload attempt (exponential backoff). |
 | `retryBaseDelayMs` | integer ≥ 0 | `200` | Base backoff delay; retry `n` waits `retryBaseDelayMs * 2^(n-1)` plus 25 % jitter. |
-| `deadLetterDir` | string | `.dsh/trajectory-deadletter` | Local directory receiving parts whose upload finally failed. |
+| `deadLetterDir` | string | `.dsh/trajectory-deadletter` | Push mode: local directory receiving parts whose upload finally failed. |
+| `root` | string | `$DSH_HOME/sessions` (or `~/.dsh/sessions`) | Ship mode: root directory of the official jsonl backend's session artifacts. **Required in ship mode.** |
+| `pollIntervalMs` | integer ≥ 1 | `5000` | Ship mode: poll interval for artifact growth, in milliseconds. |
+| `segmentBytes` | integer ≥ 1 | `262144` | Ship mode: target segment size in bytes; segments never split a zstd frame. |
+| `segmentMaxDelayMs` | integer ≥ 0 | `60000` | Ship mode: ship a short segment after this many milliseconds without growth. |
+| `dormantAfterMs` | integer ≥ 0 | `300000` | Ship mode: mark a session dormant after this many milliseconds without change. |
+| `writerId` | string? | — | Ship mode: stable writer identity override; defaults to the persisted per-machine id. |
 
 ## `sinks.otel`
 
@@ -80,6 +94,8 @@ refused upfront, before anything persists):
 
 - `sinks.s3.enabled` requires `sinks.s3.bucket`.
 - `sinks.s3.batchSize` must not exceed `sinks.s3.maxBufferedEvents`.
+- `sinks.s3.root` is required when `sinks.s3.mode` is `'ship'` (a non-empty
+  default exists, so this only bites if you explicitly blank it).
 - `sinks.otel.enabled` requires `sinks.otel.url` **or** `sinks.otel.aws`.
 - `sinks.otel.url` and `sinks.otel.aws` are mutually exclusive (`aws` already
   implies its endpoint).

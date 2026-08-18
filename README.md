@@ -7,10 +7,14 @@ An observe-only cordis plugin that subscribes to the session event firehose
 (`session/event` / `session/created` / `session/flush` / `session/disposed`)
 and persists every session's trajectory to two **independently toggleable** sinks:
 
-- **S3 / OSS sink** — JSONL part files compatible with the
+- **S3 / OSS sink** — two delivery modes: `push` (default, legacy) buffers the
+  live event stream and uploads JSONL part files compatible with the
   `@deepseek-ai/dsh-session-persistence-jsonl` artifact layout (header line +
   one event per line), with a bounded in-memory ring buffer, batch uploads,
-  exponential-backoff retry, and a local dead-letter directory.
+  exponential-backoff retry, and a local dead-letter directory; `ship` tails
+  the official jsonl backend's on-disk artifact read-only and uploads
+  byte-aligned zstd frame segments plus a per-session manifest — restorable on
+  another machine with the bundled `sync-down` CLI.
 - **OTel GenAI sink** — spans following the
   [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/),
   exported over OTLP HTTP/protobuf straight to Jaeger, to an OTel Collector
@@ -34,7 +38,7 @@ flowchart LR
         P[dsh-trajectory-persistence<br/>observe-only plugin]
     end
     subgraph sinks [Sinks — independently enabled]
-        S3S[S3 sink<br/>ring buffer + batcher<br/>backoff retry]
+        S3S[S3 sink — push mode<br/>ring buffer + batcher<br/>backoff retry]
         OTS[OTel GenAI sink<br/>GenAISpanMapper<br/>BatchSpanProcessor]
     end
     P --> S3S
@@ -58,7 +62,59 @@ flowchart LR
 Spans still open when a session is disposed are ended defensively; a
 `tool/call` whose turn ends without `tool/result` is closed with status `ERROR`.
 
-### S3 sink flush triggers
+### S3 delivery modes: push vs ship
+
+The S3 sink runs in one of two modes (`sinks.s3.mode`, default `push`):
+
+| | `push` (legacy, default) | `ship` |
+|---|---|---|
+| Data source | Live event stream (`session/event` firehose) | Official jsonl backend's on-disk artifact (read-only tail) |
+| Artifact format | Self-contained JSONL parts: `{prefix}/{projectId}/{sessionId}/{seqStart}-{seqEnd}.jsonl` | Byte-aligned zstd frame segments + `_manifest.json`: `{prefix}/{projectDir}/{sessionId}/{offsetStart}-{offsetEnd}.jsonl.zstd` |
+| Latency | Near real-time (flush at `batchSize` / `session/flush`) | Poll-driven (`pollIntervalMs`; a segment ships at `segmentBytes`, after `segmentMaxDelayMs` without growth, on dormancy, or on close) |
+| Crash safety | Buffered-but-unflushed events are lost; failed parts dead-letter locally | Only complete zstd frames ship; the torn tail a crash leaves behind never leaves the machine |
+| Resumability | Parts are independent; no cross-machine resume story | Manifest watermark resumes after state loss; `sync-down` restores the artifact on another machine |
+| Best for | Trajectory analytics, long-term archival | Backup/restore, moving sessions between machines, `dsh resume` elsewhere |
+
+`push` is **legacy but fully supported** and remains the default. In `ship`
+mode the sink never subscribes to the event stream and never re-serializes:
+complete zstd frames are cut out of the official artifact and uploaded as-is,
+and the per-session `_manifest.json` watermark is authoritative — on first
+contact with a session it wins over the local ship-state, so a lost state file
+resumes instead of re-shipping. A manifest owned by another machine's
+`writerId` logs a warning (do not run two shippers on one artifact); an
+artifact whose size regresses below the watermark is marked `conflicted` and
+skipped. See [Ship & Sync](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/ship-sync)
+for the full picture.
+
+### Restoring sessions on another machine (`sync-down`)
+
+Ship mode plus the bundled CLI covers the machine-switch workflow — with
+single-writer discipline: **end the session on the old machine before
+switching**.
+
+1. **Machine A** — run dsh with `sinks.s3.mode: ship`; end the session (the
+   dormant trigger or the sink's close flush ships the remaining tail).
+2. **Machine B** — with dsh **not** running against the local session root:
+
+   ```sh
+   dsh-trajectory-persistence sync-down --bucket dsh-trajectories --region us-east-1
+   ```
+
+3. **Machine B** — start dsh and `dsh resume <session>`; the restored
+   `session.jsonl.zstd` is the official backend's own format.
+
+Restoring is a concatenation of the manifest's segments (validated to tile
+`[0, watermark)` contiguously), published with the official backend's
+durability semantics (temp file + fsync, atomic publish, directory fsync).
+Local artifacts are never silently overwritten: an identical one is skipped, a
+byte-prefix one is completed in place (`appended`), and a diverged one is
+refused unless `--force` is given — which first backs it up to
+`session.jsonl.zstd.bak-<epochMs>`. Useful flags: `--session <id>` (one
+session only), `--root <dir>` (default `$DSH_HOME/sessions`), `--prefix`,
+`--endpoint` / `--force-path-style` for OSS/MinIO; credentials come from the
+AWS default provider chain.
+
+### S3 sink flush triggers (push mode)
 
 1. `session/flush` event (the harness's durability checkpoint),
 2. the session's buffer reaching `batchSize` events,
@@ -181,17 +237,24 @@ config:
   sinks:
     s3:
       enabled: false                    # master switch
+      mode: push                        # 'push' (event stream, legacy default) | 'ship' (tail on-disk artifact)
       bucket: ''                        # required when enabled
       prefix: dsh-trajectories          # key prefix
       region: us-east-1                 # signing region
       endpoint: ~                       # S3-compatible endpoint (OSS, MinIO)
       forcePathStyle: ~                 # path-style addressing (MinIO, OSS)
       credentials: ~                    # { accessKeyId, secretAccessKey }; absent = AWS default chain
-      batchSize: 100                    # flush trigger: buffered events per session
-      maxBufferedEvents: 10000          # ring cap; oldest dropped with a warning beyond it
+      batchSize: 100                    # push: flush trigger, buffered events per session
+      maxBufferedEvents: 10000          # push: ring cap; oldest dropped with a warning beyond it
       maxRetries: 3                     # retries after the first attempt
       retryBaseDelayMs: 200             # backoff base (retry n waits base * 2^(n-1) + jitter)
-      deadLetterDir: .dsh/trajectory-deadletter
+      deadLetterDir: .dsh/trajectory-deadletter  # push: parts whose upload finally failed
+      root: ~/.dsh/sessions             # ship: official jsonl backend's session root ($DSH_HOME/sessions)
+      pollIntervalMs: 5000              # ship: poll interval for artifact growth
+      segmentBytes: 262144              # ship: target segment size (never splits a zstd frame)
+      segmentMaxDelayMs: 60000          # ship: ship a short segment after this without growth
+      dormantAfterMs: 300000            # ship: dormant after this without change
+      writerId: ~                       # ship: stable writer identity override
     otel:
       enabled: false
       url: ''                           # full OTLP traces endpoint, e.g. http://jaeger:4318/v1/traces (mutually exclusive with aws)
@@ -388,12 +451,18 @@ Layout:
 │   ├── sinks.ts         # TrajectorySinks: hot-swappable sinks, per-sink rebuild, status snapshot
 │   ├── jsonl.ts         # jsonl-persistence-compatible header line, projectKey, encodeSegment
 │   ├── sink-utils.ts    # EventBuffer (ring) + BufferedPartSink (batch/retry/dead-letter, stats())
-│   ├── s3-sink.ts       # S3TrajectorySink: S3 transport (uploader + key layout) over BufferedPartSink
+│   ├── s3-sink.ts       # S3TrajectorySink (push mode): S3 transport (uploader + key layout) over BufferedPartSink
+│   ├── shipper.ts       # S3ShipperSink (ship mode): read-only artifact tail, zstd frame segments, manifest watermark
+│   ├── manifest.ts      # ship mode: _manifest.json (watermark/segments/writerId) + per-machine writer id
+│   ├── ship-state.ts    # ship mode: local per-session ship-state (offset, dormancy, conflicted)
+│   ├── zstd-scan.ts     # ship mode: complete zstd frame scanner (torn tail never ships)
+│   ├── sync-down.ts     # restore local artifacts from shipped segments (prefix-append, diverge-refuse, force backup)
+│   ├── cli.ts           # `dsh-trajectory-persistence sync-down` command line
 │   ├── otel-sink.ts     # GenAISpanMapper (pure mapping) + OtelTrajectorySink (OTLP pipeline)
 │   ├── sigv4-otlp-exporter.ts # SigV4-signed OTLP exporter: CloudWatch / AgentCore Observability
 │   └── retry.ts         # exponential backoff helper
-└── test/                # vitest: otel-map, sigv4-otlp-exporter, config, s3-sink, sinks (rebuild),
-                         #   retry, integration (real cordis ctx)
+└── test/                # vitest: otel-map, sigv4-otlp-exporter, config, s3-sink, shipper, manifest,
+                         #   ship-state, zstd-scan, sync-down, sinks (rebuild), retry, integration (real cordis ctx)
 ```
 
 ## Notes & caveats
@@ -427,7 +496,8 @@ The full documentation site lives at
 
 - [Getting Started](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/getting-started) — install, first trace with a local Jaeger
 - [Configuration Reference](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/configuration) — every field, defaults, validation rules, hot-reload
-- [S3 / OSS Sink](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/s3-sink) — JSONL part layout, ring buffer, retry & dead-letter
+- [S3 / OSS Sink](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/s3-sink) — push mode: JSONL part layout, ring buffer, retry & dead-letter
+- [Ship & Sync](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/ship-sync) — ship mode: zstd frame segments + manifest, `sync-down` restore, machine switching
 - [OTel GenAI Sink](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/otel-sink) — event → span mapping, Jaeger / Collector / Langfuse
 - [AWS CloudWatch & AgentCore](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/aws-cloudwatch) — SigV4 delivery, China endpoints, Transaction Search
 - [Development](https://aws-cnug-o11y.github.io/dsh-trajectory-persistence/guide/development) — build/test, sink architecture, adding a sink

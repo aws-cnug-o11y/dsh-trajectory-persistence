@@ -29,6 +29,7 @@ export default defineConfig({
         text: 'Sinks',
         items: [
           { text: 'S3', link: '/guide/s3-sink' },
+          { text: 'Ship & Sync', link: '/guide/ship-sync' },
           { text: 'OTel GenAI Sink', link: '/guide/otel-sink' },
           { text: 'AWS CloudWatch & AgentCore', link: '/guide/aws-cloudwatch' },
         ],
