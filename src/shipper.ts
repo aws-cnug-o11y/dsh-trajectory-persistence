@@ -24,8 +24,9 @@
 
 import { open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import type { Context } from '@deepseek-ai/cordis'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { S3SinkConfig } from './config.js'
 import {
@@ -52,13 +53,19 @@ import { withRetry } from './retry.js'
 
 /** Name of the artifact file inside each session directory. */
 const ARTIFACT_NAME = 'session.jsonl.zstd'
-/** `SESSION_FORMAT_VERSION` of the artifacts produced by the official jsonl backend. */
-const SESSION_FORMAT_VERSION = 1
 
-/** Object store with a release hook — the AWS-backed default owned by the sink. */
+/** Object store with listing and a release hook — the AWS-backed default owned by the sink. */
 export interface S3ObjectStore extends ObjectStore {
+  /** List every object key under `prefix` (empty array when none). */
+  list(prefix: string): Promise<string[]>
   close(): Promise<void>
 }
+
+/** Connection-related subset of {@link S3SinkConfig} the object store needs. */
+export type S3ObjectStoreConfig = Pick<
+  S3SinkConfig,
+  'bucket' | 'region' | 'endpoint' | 'forcePathStyle' | 'credentials'
+>
 
 /**
  * Build the default object store backed by `@aws-sdk/client-s3`, mirroring
@@ -66,7 +73,7 @@ export interface S3ObjectStore extends ObjectStore {
  * The uploader there only accepts string bodies, so binary segments and
  * manifest reads go through this dedicated store.
  */
-export function createS3ObjectStore(config: S3SinkConfig): S3ObjectStore {
+export function createS3ObjectStore(config: S3ObjectStoreConfig): S3ObjectStore {
   const client = new S3Client({
     region: config.region,
     ...config.endpoint !== undefined ? { endpoint: config.endpoint } : {},
@@ -91,6 +98,22 @@ export function createS3ObjectStore(config: S3SinkConfig): S3ObjectStore {
         Body: body,
         ContentType: key.endsWith('.json') ? 'application/json' : 'application/zstd',
       }))
+    },
+    async list(prefix) {
+      const keys: string[] = []
+      let continuationToken: string | undefined
+      do {
+        const out = await client.send(new ListObjectsV2Command({
+          Bucket: config.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }))
+        for (const object of out.Contents ?? []) {
+          if (object.Key !== undefined) keys.push(object.Key)
+        }
+        continuationToken = out.IsTruncated ? out.NextContinuationToken : undefined
+      } while (continuationToken !== undefined)
+      return keys
     },
     async close() {
       client.destroy()

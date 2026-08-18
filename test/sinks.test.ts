@@ -283,9 +283,9 @@ describe('TrajectorySinks ship mode', () => {
 
   it('rebuilds the s3 sink when the mode flips between push and ship', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-sinks-flip-'))
+    interface S3Spy { kind: 'push' | 'ship'; closeCount: number; closed?: Promise<void> }
+    const built: S3Spy[] = []
     try {
-      interface S3Spy { kind: 'push' | 'ship'; closeCount: number }
-      const built: S3Spy[] = []
       const factories: SinkFactories = {
         s3: (ctx, cfg) => {
           const spy: S3Spy = { kind: cfg.mode === 'ship' ? 'ship' : 'push', closeCount: 0 }
@@ -293,9 +293,12 @@ describe('TrajectorySinks ship mode', () => {
             ? new S3ShipperSink(ctx, cfg, new MemoryStore(), join(home, 'state'))
             : new S3TrajectorySink(ctx, cfg, new MockUploader())
           const close = sink.close.bind(sink)
-          sink.close = async () => {
+          sink.close = () => {
             spy.closeCount++
-            await close()
+            // reconfigure() closes replaced sinks in the background; track the
+            // real settle so the rm in finally cannot race the drain.
+            spy.closed = close()
+            return spy.closed
           }
           built.push(spy)
           return sink
@@ -322,6 +325,7 @@ describe('TrajectorySinks ship mode', () => {
       expect(sinks.status().s3.enabled && !('mode' in sinks.status().s3)).toBe(true)
       await sinks.close()
     } finally {
+      await Promise.all(built.map(spy => spy.closed))
       await rm(home, { recursive: true, force: true })
     }
   })

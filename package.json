@@ -27,6 +27,9 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "bin": {
+    "dsh-trajectory-persistence": "lib/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -40,6 +43,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "sync-down": "node lib/cli.js sync-down",
     "test": "vitest run",
     "test:watch": "vitest",
     "docs:dev": "vitepress dev docs",
