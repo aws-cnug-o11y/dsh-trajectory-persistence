@@ -20,10 +20,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/tiandeng/dsh-trajectory-persistence.git"
+    "url": "https://github.com/aws-cnug-o11y/dsh-trajectory-persistence.git"
   },
-  "homepage": "https://github.com/tiandeng/dsh-trajectory-persistence#readme",
-  "bugs": "https://github.com/tiandeng/dsh-trajectory-persistence/issues",
+  "homepage": "https://github.com/aws-cnug-o11y/dsh-trajectory-persistence#readme",
+  "bugs": "https://github.com/aws-cnug-o11y/dsh-trajectory-persistence/issues",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
