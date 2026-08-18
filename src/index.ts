@@ -88,7 +88,7 @@ export function apply(ctx: Context, config: Config) {
   // service takes over, and again after it goes away.
   let current = () => config
 
-  ctx.on('session/created', (session) => {
+  ctx.on('session/created', session => {
     sinks.sessionCreated(session)
   })
   ctx.on('session/event', (session, event) => {
@@ -97,8 +97,8 @@ export function apply(ctx: Context, config: Config) {
   // Durability checkpoint: the harness awaits flush listeners, so return the
   // sink's upload promise — a settled flush means the trajectory left the
   // process (uploaded or dead-lettered; the promise never rejects).
-  ctx.on('session/flush', (session) => sinks.onFlush(session))
-  ctx.on('session/disposed', (session) => {
+  ctx.on('session/flush', session => sinks.onFlush(session))
+  ctx.on('session/disposed', session => {
     sinks.onDisposed(session)
   })
   // Graceful drain at fiber disposal (cordis runs the returned disposer).
@@ -109,7 +109,7 @@ export function apply(ctx: Context, config: Config) {
   // every committed change rebuilds the affected sinks in place. With no
   // provider this never runs and the composed config stays authoritative.
   installSettingsSection(ctx, namespace, Config, config, {
-    setSource: (source) => {
+    setSource: source => {
       current = source
     },
     // reconfigure() rebuilds only the sinks whose config changed; a build
@@ -120,10 +120,11 @@ export function apply(ctx: Context, config: Config) {
 
   // Optional commands capability: with no commands service the child fiber
   // simply never starts, so the plugin loads unchanged minus the command.
-  ctx.inject(['commands'], (cctx) => {
+  ctx.inject(['commands'], cctx => {
     cctx.commands.register({
       name: 'trajectory-status',
-      description: 'Show trajectory persistence status: sink switches, upload statistics, last error.',
+      description:
+        'Show trajectory persistence status: sink switches, upload statistics, last error.',
       handler: () => ({
         kind: 'success',
         // The resolved settings value is a fresh frozen object; the detached

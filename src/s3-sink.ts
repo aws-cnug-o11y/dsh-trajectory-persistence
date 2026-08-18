@@ -35,18 +35,20 @@ export interface ObjectUploader {
 export function createS3Uploader(config: S3SinkConfig): ObjectUploader {
   const client = new S3Client({
     region: config.region,
-    ...config.endpoint !== undefined ? { endpoint: config.endpoint } : {},
-    ...config.forcePathStyle !== undefined ? { forcePathStyle: config.forcePathStyle } : {},
-    ...config.credentials !== undefined ? { credentials: config.credentials } : {},
+    ...(config.endpoint !== undefined ? { endpoint: config.endpoint } : {}),
+    ...(config.forcePathStyle !== undefined ? { forcePathStyle: config.forcePathStyle } : {}),
+    ...(config.credentials !== undefined ? { credentials: config.credentials } : {}),
   })
   return {
     async putObject(key, body) {
-      await client.send(new PutObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-        Body: body,
-        ContentType: 'application/x-ndjson',
-      }))
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: body,
+          ContentType: 'application/x-ndjson',
+        }),
+      )
     },
     async close() {
       client.destroy()
@@ -67,7 +69,12 @@ export class S3TrajectorySink extends BufferedPartSink {
     this.uploader = uploader ?? createS3Uploader(config)
   }
 
-  protected async uploadPart(header: SessionHeader, seqStart: number, seqEnd: number, body: string): Promise<void> {
+  protected async uploadPart(
+    header: SessionHeader,
+    seqStart: number,
+    seqEnd: number,
+    body: string,
+  ): Promise<void> {
     await this.uploader.putObject(this.keyOf(header, seqStart, seqEnd), body)
   }
 

@@ -82,7 +82,10 @@ export class SigV4OtlpTraceExporter implements SpanExporter {
 
   export(spans: ReadableSpan[], resultCallback: (result: ExportResult) => void): void {
     if (this.closed) {
-      resultCallback({ code: ExportResultCode.FAILED, error: new Error('sigv4 otlp exporter is shut down') })
+      resultCallback({
+        code: ExportResultCode.FAILED,
+        error: new Error('sigv4 otlp exporter is shut down'),
+      })
       return
     }
     let body: Uint8Array | undefined
@@ -111,7 +114,7 @@ export class SigV4OtlpTraceExporter implements SpanExporter {
     const request = new HttpRequest({
       protocol: this.url.protocol,
       hostname: this.url.hostname,
-      ...this.url.port !== '' ? { port: Number(this.url.port) } : {},
+      ...(this.url.port !== '' ? { port: Number(this.url.port) } : {}),
       path: this.url.pathname,
       method: 'POST',
       headers: {
@@ -130,7 +133,9 @@ export class SigV4OtlpTraceExporter implements SpanExporter {
     })
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 512)
-      throw new Error(`sigv4 otlp export failed: HTTP ${response.status}${detail ? ` — ${detail}` : ''}`)
+      throw new Error(
+        `sigv4 otlp export failed: HTTP ${response.status}${detail ? ` — ${detail}` : ''}`,
+      )
     }
   }
 

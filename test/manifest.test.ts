@@ -53,8 +53,9 @@ describe('segmentKey', () => {
 
 describe('manifestKey', () => {
   it('joins prefix, project dir, and session id', () => {
-    expect(manifestKey('dsh-trajectories', '--repo-proj--', 'sess-1'))
-      .toBe('dsh-trajectories/--repo-proj--/sess-1/_manifest.json')
+    expect(manifestKey('dsh-trajectories', '--repo-proj--', 'sess-1')).toBe(
+      'dsh-trajectories/--repo-proj--/sess-1/_manifest.json',
+    )
   })
 
   it('trims surrounding slashes of the prefix', () => {
@@ -68,9 +69,18 @@ describe('manifestKey', () => {
 
 describe('parseManifest / serializeManifest', () => {
   it('round-trips a manifest', () => {
-    const original = manifest({ watermark: 262144, segments: [{
-      key: 'k', offsetStart: 0, offsetEnd: 262144, bytes: 262144, uploadedAt: '2026-01-01T00:00:00.000Z',
-    }] })
+    const original = manifest({
+      watermark: 262144,
+      segments: [
+        {
+          key: 'k',
+          offsetStart: 0,
+          offsetEnd: 262144,
+          bytes: 262144,
+          uploadedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
     expect(parseManifest(serializeManifest(original))).toEqual(original)
   })
 
@@ -83,15 +93,16 @@ describe('parseManifest / serializeManifest', () => {
   })
 
   it('rejects a foreign version explicitly', () => {
-    expect(() => parseManifest(JSON.stringify(manifest({ version: 2 }))))
-      .toThrow(/unsupported manifest version 2 \(expected 1\)/)
+    expect(() => parseManifest(JSON.stringify(manifest({ version: 2 })))).toThrow(
+      /unsupported manifest version 2 \(expected 1\)/,
+    )
   })
 })
 
 describe('updateManifest', () => {
   it('creates the manifest on first contact (mutate receives null)', async () => {
     const store = new MemoryStore()
-    const written = await updateManifest(store, 'k', (current) => {
+    const written = await updateManifest(store, 'k', current => {
       expect(current).toBeNull()
       return manifest({ watermark: 100 })
     })
@@ -104,7 +115,10 @@ describe('updateManifest', () => {
   it('mutates the stored manifest in place', async () => {
     const store = new MemoryStore()
     store.objects.set('k', Buffer.from(serializeManifest(manifest({ watermark: 50 }))))
-    await updateManifest(store, 'k', (current) => ({ ...current!, watermark: current!.watermark + 50 }))
+    await updateManifest(store, 'k', current => ({
+      ...current!,
+      watermark: current!.watermark + 50,
+    }))
     expect(parseManifest(store.objects.get('k')!.toString()).watermark).toBe(100)
   })
 
@@ -116,10 +130,13 @@ describe('updateManifest', () => {
       if (raced) return
       raced = true
       // Another writer lands a newer manifest between our write and verify read.
-      store.objects.set('k', Buffer.from(serializeManifest(manifest({ writerId: 'other', watermark: 20 }))))
+      store.objects.set(
+        'k',
+        Buffer.from(serializeManifest(manifest({ writerId: 'other', watermark: 20 }))),
+      )
     }
     const currents: (ShipManifest | null)[] = []
-    const written = await updateManifest(store, 'k', (current) => {
+    const written = await updateManifest(store, 'k', current => {
       currents.push(current)
       return manifest({ watermark: (current?.watermark ?? 0) + 5 })
     })

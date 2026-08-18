@@ -81,27 +81,37 @@ export class GenAISpanMapper {
   private openStep(state: SessionSpans, turn: number, step: number, startTime: number): StepState {
     const key = SessionSpans.stepKey(turn, step)
     const parent = state.turns.get(turn)?.ctx
-    const span = this.tracer.startSpan('chat', {
-      startTime,
-      attributes: {
-        'gen_ai.operation.name': 'chat',
-        'gen_ai.conversation.id': state.sessionId,
-        ...state.provider !== undefined ? { 'gen_ai.provider.name': state.provider } : {},
-        ...state.model !== undefined ? { 'gen_ai.request.model': state.model } : {},
-        'dsh.turn': turn,
-        'dsh.step': step,
+    const span = this.tracer.startSpan(
+      'chat',
+      {
+        startTime,
+        attributes: {
+          'gen_ai.operation.name': 'chat',
+          'gen_ai.conversation.id': state.sessionId,
+          ...(state.provider !== undefined ? { 'gen_ai.provider.name': state.provider } : {}),
+          ...(state.model !== undefined ? { 'gen_ai.request.model': state.model } : {}),
+          'dsh.turn': turn,
+          'dsh.step': step,
+        },
       },
-    }, parent)
+      parent,
+    )
     const stepState: StepState = {
-      span, ctx: trace.setSpan(context.active(), span),
-      chunks: 0, textBytes: 0, reasoningBytes: 0, toolCallDeltaBytes: 0,
+      span,
+      ctx: trace.setSpan(context.active(), span),
+      chunks: 0,
+      textBytes: 0,
+      reasoningBytes: 0,
+      toolCallDeltaBytes: 0,
     }
     state.steps.set(key, stepState)
     return stepState
   }
 
   private ensureStep(state: SessionSpans, turn: number, step: number, time: number): StepState {
-    return state.steps.get(SessionSpans.stepKey(turn, step)) ?? this.openStep(state, turn, step, time)
+    return (
+      state.steps.get(SessionSpans.stepKey(turn, step)) ?? this.openStep(state, turn, step, time)
+    )
   }
 
   /** Fold one session event into the span tree. */
@@ -135,7 +145,8 @@ export class GenAISpanMapper {
         const chunk = event.data.chunk
         if (chunk.type === 'text-delta') stepState.textBytes += chunk.text.length
         else if (chunk.type === 'reasoning-delta') stepState.reasoningBytes += chunk.text.length
-        else if (chunk.type === 'tool-call-delta') stepState.toolCallDeltaBytes += chunk.argumentsDelta.length
+        else if (chunk.type === 'tool-call-delta')
+          stepState.toolCallDeltaBytes += chunk.argumentsDelta.length
         break
       }
       case 'assistant/message': {
@@ -145,10 +156,16 @@ export class GenAISpanMapper {
           stepState.span.setAttribute('gen_ai.usage.input_tokens', usage.inputTokens)
           stepState.span.setAttribute('gen_ai.usage.output_tokens', usage.outputTokens)
           if (usage.cacheReadTokens !== undefined) {
-            stepState.span.setAttribute('gen_ai.usage.cache_read.input_tokens', usage.cacheReadTokens)
+            stepState.span.setAttribute(
+              'gen_ai.usage.cache_read.input_tokens',
+              usage.cacheReadTokens,
+            )
           }
           if (usage.cacheWriteTokens !== undefined) {
-            stepState.span.setAttribute('gen_ai.usage.cache_creation.input_tokens', usage.cacheWriteTokens)
+            stepState.span.setAttribute(
+              'gen_ai.usage.cache_creation.input_tokens',
+              usage.cacheWriteTokens,
+            )
           }
         }
         break
@@ -160,7 +177,10 @@ export class GenAISpanMapper {
         stepState.span.setAttribute('dsh.assistant.chunks', stepState.chunks)
         stepState.span.setAttribute('dsh.assistant.text_bytes', stepState.textBytes)
         stepState.span.setAttribute('dsh.assistant.reasoning_bytes', stepState.reasoningBytes)
-        stepState.span.setAttribute('dsh.assistant.tool_call_delta_bytes', stepState.toolCallDeltaBytes)
+        stepState.span.setAttribute(
+          'dsh.assistant.tool_call_delta_bytes',
+          stepState.toolCallDeltaBytes,
+        )
         stepState.span.end(event.time)
         state.steps.delete(key)
         break
@@ -168,20 +188,29 @@ export class GenAISpanMapper {
       case 'tool/call': {
         const stepKey = SessionSpans.stepKey(event.data.turn, event.data.step)
         const parent = state.steps.get(stepKey)?.ctx ?? state.turns.get(event.data.turn)?.ctx
-        const args = event.data.arguments.length > MAX_ARGUMENTS_ATTRIBUTE_BYTES
-          ? event.data.arguments.slice(0, MAX_ARGUMENTS_ATTRIBUTE_BYTES)
-          : event.data.arguments
-        const span = this.tracer.startSpan('execute_tool', {
-          startTime: event.time,
-          attributes: {
-            'gen_ai.operation.name': 'execute_tool',
-            'gen_ai.conversation.id': session.id,
-            'gen_ai.tool.name': event.data.name,
-            'gen_ai.tool.call.id': event.data.callId,
-            'gen_ai.tool.call.arguments': args,
+        const args =
+          event.data.arguments.length > MAX_ARGUMENTS_ATTRIBUTE_BYTES
+            ? event.data.arguments.slice(0, MAX_ARGUMENTS_ATTRIBUTE_BYTES)
+            : event.data.arguments
+        const span = this.tracer.startSpan(
+          'execute_tool',
+          {
+            startTime: event.time,
+            attributes: {
+              'gen_ai.operation.name': 'execute_tool',
+              'gen_ai.conversation.id': session.id,
+              'gen_ai.tool.name': event.data.name,
+              'gen_ai.tool.call.id': event.data.callId,
+              'gen_ai.tool.call.arguments': args,
+            },
           },
-        }, parent)
-        state.tools.set(event.data.callId, { span, ctx: trace.setSpan(context.active(), span), stepKey })
+          parent,
+        )
+        state.tools.set(event.data.callId, {
+          span,
+          ctx: trace.setSpan(context.active(), span),
+          stepKey,
+        })
         break
       }
       case 'tool/result': {
@@ -189,9 +218,12 @@ export class GenAISpanMapper {
         if (callId === undefined) break
         const open = state.tools.get(callId)
         if (!open) break
-        const failed = event.data.error !== undefined || event.data.message.content[0]?.isError === true
+        const failed =
+          event.data.error !== undefined || event.data.message.content[0]?.isError === true
         if (failed) {
-          const errorName = event.data.error ? `${event.data.error.name}: ${event.data.error.code}` : 'tool result isError'
+          const errorName = event.data.error
+            ? `${event.data.error.name}: ${event.data.error.code}`
+            : 'tool result isError'
           open.span.setStatus({ code: SpanStatusCode.ERROR, message: errorName })
           open.span.setAttribute('error.type', event.data.error?.name ?? 'ToolError')
         }
@@ -203,7 +235,10 @@ export class GenAISpanMapper {
         // Close dangling tool/step spans of this turn before the turn span.
         for (const [callId, open] of state.tools) {
           if (open.stepKey?.startsWith(`${event.data.turn}:`)) {
-            open.span.setStatus({ code: SpanStatusCode.ERROR, message: 'turn ended before tool/result' })
+            open.span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: 'turn ended before tool/result',
+            })
             open.span.end(event.time)
             state.tools.delete(callId)
           }
@@ -276,7 +311,7 @@ export class OtelTrajectorySink {
   private readonly logger
 
   constructor(
-    private readonly ctx: Context,
+    ctx: Context,
     private readonly config: OtelSinkConfig,
     exporter?: SpanExporter,
   ) {
@@ -284,27 +319,32 @@ export class OtelTrajectorySink {
       throw new Error('otel sink: url or aws is required when the otel sink is enabled')
     }
     if (config.url && config.aws) {
-      throw new Error('otel sink: url and aws are mutually exclusive (aws already implies its endpoint)')
+      throw new Error(
+        'otel sink: url and aws are mutually exclusive (aws already implies its endpoint)',
+      )
     }
     if (config.aws && !config.aws.region) {
       throw new Error('otel sink: aws.region is required when aws delivery is configured')
     }
     if (!Number.isInteger(config.maxExportBatchSize) || config.maxExportBatchSize < 1) {
-      throw new Error(`otel sink: maxExportBatchSize must be a positive integer, got ${String(config.maxExportBatchSize)}`)
+      throw new Error(
+        `otel sink: maxExportBatchSize must be a positive integer, got ${String(config.maxExportBatchSize)}`,
+      )
     }
     this.logger = ctx.logger('dsh-trajectory-persistence/otel')
     this.processor = new BatchSpanProcessor(
-      exporter ?? (config.aws
-        ? new SigV4OtlpTraceExporter({
-          region: config.aws.region,
-          ...config.aws.url !== undefined ? { url: config.aws.url } : {},
-          ...config.aws.service !== undefined ? { service: config.aws.service } : {},
-          ...config.headers !== undefined ? { headers: config.headers } : {},
-        })
-        : new OTLPTraceExporter({
-          url: config.url,
-          ...config.headers !== undefined ? { headers: config.headers } : {},
-        })),
+      exporter ??
+        (config.aws
+          ? new SigV4OtlpTraceExporter({
+              region: config.aws.region,
+              ...(config.aws.url !== undefined ? { url: config.aws.url } : {}),
+              ...(config.aws.service !== undefined ? { service: config.aws.service } : {}),
+              ...(config.headers !== undefined ? { headers: config.headers } : {}),
+            })
+          : new OTLPTraceExporter({
+              url: config.url,
+              ...(config.headers !== undefined ? { headers: config.headers } : {}),
+            })),
       {
         maxExportBatchSize: config.maxExportBatchSize,
         scheduledDelayMillis: config.scheduledDelayMillis,
@@ -312,7 +352,9 @@ export class OtelTrajectorySink {
       },
     )
     this.provider = new NodeTracerProvider({
-      resource: defaultResource().merge(resourceFromAttributes({ [ATTR_SERVICE_NAME]: config.serviceName })),
+      resource: defaultResource().merge(
+        resourceFromAttributes({ [ATTR_SERVICE_NAME]: config.serviceName }),
+      ),
       spanProcessors: [this.processor],
     })
     this.mapper = new GenAISpanMapper(this.provider.getTracer('dsh-trajectory-persistence'))
@@ -322,7 +364,9 @@ export class OtelTrajectorySink {
     try {
       this.mapper.handle(session, event)
     } catch (error) {
-      this.logger.warn(`span mapping failed for ${event.type} (session ${session.id}): ${String(error)}`)
+      this.logger.warn(
+        `span mapping failed for ${event.type} (session ${session.id}): ${String(error)}`,
+      )
     }
   }
 
@@ -341,7 +385,10 @@ export class OtelTrajectorySink {
     const timeout = this.config.shutdownTimeoutMillis
     let timer: NodeJS.Timeout | undefined
     const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`otel drain timed out after ${timeout}ms`)), timeout)
+      timer = setTimeout(
+        () => reject(new Error(`otel drain timed out after ${timeout}ms`)),
+        timeout,
+      )
     })
     try {
       await Promise.race([this.provider.shutdown(), deadline])

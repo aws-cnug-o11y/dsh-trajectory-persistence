@@ -15,7 +15,7 @@
  * @module dsh-trajectory-persistence/zstd-scan
  */
 
-const ZSTD_MAGIC = 0xFD2FB528
+const ZSTD_MAGIC = 0xfd2fb528
 
 /** Byte range occupied by one structurally complete Zstandard frame. */
 export interface ZstdFrameRange {
@@ -40,7 +40,10 @@ export interface ZstdFrameScan {
  * @param maxFrames - optional complete-frame limit for metadata-only readers.
  * @returns complete frame ranges and an optional incomplete-final-frame start.
  */
-export function scanZstdFrames(buffer: Buffer, maxFrames = Number.POSITIVE_INFINITY): ZstdFrameScan {
+export function scanZstdFrames(
+  buffer: Buffer,
+  maxFrames = Number.POSITIVE_INFINITY,
+): ZstdFrameScan {
   const frames: ZstdFrameRange[] = []
   let offset = 0
 
@@ -56,7 +59,9 @@ export function scanZstdFrames(buffer: Buffer, maxFrames = Number.POSITIVE_INFIN
     const descriptor = buffer.readUInt8(offset)
     offset += 1
     if ((descriptor & 0x18) !== 0) {
-      throw new Error(`corrupt Zstandard session log: reserved frame-header bit at byte ${offset - 1}`)
+      throw new Error(
+        `corrupt Zstandard session log: reserved frame-header bit at byte ${offset - 1}`,
+      )
     }
 
     const contentSizeFlag = descriptor >>> 6
@@ -64,9 +69,7 @@ export function scanZstdFrames(buffer: Buffer, maxFrames = Number.POSITIVE_INFIN
     const checksum = (descriptor & 0x04) !== 0
     const dictionaryFlag = descriptor & 0x03
     const dictionaryBytes = dictionaryFlag === 3 ? 4 : dictionaryFlag
-    const contentSizeBytes = contentSizeFlag === 0
-      ? (singleSegment ? 1 : 0)
-      : 1 << contentSizeFlag
+    const contentSizeBytes = contentSizeFlag === 0 ? (singleSegment ? 1 : 0) : 1 << contentSizeFlag
     const remainingHeaderBytes = (singleSegment ? 0 : 1) + dictionaryBytes + contentSizeBytes
     if (buffer.length - offset < remainingHeaderBytes) return { frames, tornStart: start }
     offset += remainingHeaderBytes

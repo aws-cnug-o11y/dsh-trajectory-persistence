@@ -114,7 +114,12 @@ describe('S3ShipperSink', () => {
   })
 
   it('ships incremental appends as ordered, byte-exact segments', async () => {
-    const parts = [frame('{"type":"session"}\n'), frame('event-2'), frame('event-3'), frame('event-4')]
+    const parts = [
+      frame('{"type":"session"}\n'),
+      frame('event-2'),
+      frame('event-3'),
+      frame('event-4'),
+    ]
     const instance = sink(shipConfig(root, { segmentBytes: 1 })) // every complete frame is due
 
     await writeArtifact(Buffer.concat(parts.slice(0, 2)))
@@ -140,13 +145,21 @@ describe('S3ShipperSink', () => {
     expect(manifest.segments.map(s => [s.offsetStart, s.offsetEnd, s.bytes])).toEqual([
       [0, parts[0].length, parts[0].length],
       [parts[0].length, parts[0].length + parts[1].length, parts[1].length],
-      [parts[0].length + parts[1].length, parts[0].length + parts[1].length + parts[2].length, parts[2].length],
+      [
+        parts[0].length + parts[1].length,
+        parts[0].length + parts[1].length + parts[2].length,
+        parts[2].length,
+      ],
       [shipped.length - parts[3].length, shipped.length, parts[3].length],
     ])
     const state = await loadShipState(stateDir)
     expect(state.sessions[SESS]!.uploadedOffset).toBe(shipped.length)
     expect(instance.stats()).toMatchObject({
-      mode: 'ship', trackedSessions: 1, uploadedSegments: 4, uploadedBytes: shipped.length, lagBytes: 0,
+      mode: 'ship',
+      trackedSessions: 1,
+      uploadedSegments: 4,
+      uploadedBytes: shipped.length,
+      lagBytes: 0,
     })
   })
 
@@ -294,12 +307,18 @@ describe('S3ShipperSink', () => {
     await writeArtifact(parts[0].subarray(0, 5))
     await instance.poll()
     expect(store.segmentKeys()).toHaveLength(2) // nothing shipped
-    expect(warn.mock.calls.some(([message]) => /regressed below the uploaded watermark/.test(message))).toBe(true)
+    expect(
+      warn.mock.calls.some(([message]) => /regressed below the uploaded watermark/.test(message)),
+    ).toBe(true)
     expect(instance.stats().conflicted).toEqual([`${PROJ}/${SESS}`])
-    const conflictWarns = warn.mock.calls.filter(([message]) => /regressed below/.test(message)).length
+    const conflictWarns = warn.mock.calls.filter(([message]) =>
+      /regressed below/.test(message),
+    ).length
 
     await instance.poll() // warn once, not per pass
-    expect(warn.mock.calls.filter(([message]) => /regressed below/.test(message))).toHaveLength(conflictWarns)
+    expect(warn.mock.calls.filter(([message]) => /regressed below/.test(message))).toHaveLength(
+      conflictWarns,
+    )
 
     // Even when the artifact grows past the watermark again, the conflict
     // persists — resolution requires an explicit watermark advance elsewhere.
@@ -320,13 +339,15 @@ describe('S3ShipperSink', () => {
       format: { kind: 'jsonl.zstd', sessionFormatVersion: 1 },
       writerId: 'other-machine',
       watermark: first,
-      segments: [{
-        key: `dsh-trajectories/${PROJ}/${SESS}/${segmentKey(0, first)}`,
-        offsetStart: 0,
-        offsetEnd: first,
-        bytes: first,
-        uploadedAt: new Date().toISOString(),
-      }],
+      segments: [
+        {
+          key: `dsh-trajectories/${PROJ}/${SESS}/${segmentKey(0, first)}`,
+          offsetStart: 0,
+          offsetEnd: first,
+          bytes: first,
+          uploadedAt: new Date().toISOString(),
+        },
+      ],
       updatedAt: new Date().toISOString(),
     }
     store.objects.set(mkey, Buffer.from(JSON.stringify(foreign)))
@@ -335,7 +356,9 @@ describe('S3ShipperSink', () => {
     const instance = sink(shipConfig(root, { segmentBytes: 1 }))
     await instance.poll()
 
-    expect(warn.mock.calls.some(([message]) => /owned by writer other-machine/.test(message))).toBe(true)
+    expect(warn.mock.calls.some(([message]) => /owned by writer other-machine/.test(message))).toBe(
+      true,
+    )
     // Continued from the foreign watermark instead of re-shipping the prefix.
     expect(store.segmentKeys()).toEqual([
       `dsh-trajectories/${PROJ}/${SESS}/${segmentKey(first, first + parts[1].length)}`,

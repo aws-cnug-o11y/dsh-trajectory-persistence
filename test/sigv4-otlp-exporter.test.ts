@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExportResultCode } from '@opentelemetry/core'
 import type { ExportResult } from '@opentelemetry/core'
-import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base'
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
 import { SigV4OtlpTraceExporter, defaultAwsOtlpUrl } from '../src/sigv4-otlp-exporter.js'
 import type { SigV4OtlpTraceExporterConfig } from '../src/sigv4-otlp-exporter.js'
@@ -9,7 +13,10 @@ import { OtelTrajectorySink } from '../src/otel-sink.js'
 import type { OtelSinkConfig } from '../src/config.js'
 import { ev, fakeCtx, fakeSession } from './helpers.js'
 
-const credentials = { accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY' }
+const credentials = {
+  accessKeyId: 'AKIDEXAMPLE',
+  secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',
+}
 
 interface FetchCall {
   url: string
@@ -30,27 +37,40 @@ function finishedSpans(): ReadableSpan[] {
   return memory.getFinishedSpans()
 }
 
-function config(overrides: Partial<SigV4OtlpTraceExporterConfig> = {}): SigV4OtlpTraceExporterConfig {
+function config(
+  overrides: Partial<SigV4OtlpTraceExporterConfig> = {},
+): SigV4OtlpTraceExporterConfig {
   return { region: 'us-west-2', credentials, ...overrides }
 }
 
 function mockFetch(handler?: (call: FetchCall) => Response): { calls: FetchCall[] } {
   const calls: FetchCall[] = []
-  vi.stubGlobal('fetch', vi.fn(async (input: unknown, init: { method: string; headers: Record<string, string>; body: Uint8Array }) => {
-    const call: FetchCall = {
-      url: String(input),
-      method: init.method,
-      headers: init.headers,
-      body: init.body,
-    }
-    calls.push(call)
-    return handler ? handler(call) : new Response('', { status: 200 })
-  }))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (
+        input: unknown,
+        init: { method: string; headers: Record<string, string>; body: Uint8Array },
+      ) => {
+        const call: FetchCall = {
+          url: String(input),
+          method: init.method,
+          headers: init.headers,
+          body: init.body,
+        }
+        calls.push(call)
+        return handler ? handler(call) : new Response('', { status: 200 })
+      },
+    ),
+  )
   return { calls }
 }
 
-function exportOnce(exporter: SigV4OtlpTraceExporter, spans: ReadableSpan[]): Promise<ExportResult> {
-  return new Promise((resolve) => exporter.export(spans, resolve))
+function exportOnce(
+  exporter: SigV4OtlpTraceExporter,
+  spans: ReadableSpan[],
+): Promise<ExportResult> {
+  return new Promise(resolve => exporter.export(spans, resolve))
 }
 
 describe('SigV4OtlpTraceExporter', () => {
@@ -81,9 +101,11 @@ describe('SigV4OtlpTraceExporter', () => {
   })
 
   it('honors a url override (VPC endpoint / non-standard partition)', async () => {
-    const exporter = new SigV4OtlpTraceExporter(config({
-      url: 'https://vpce-0123-xray.cn-north-1.vpce.amazonaws.com.cn/v1/traces',
-    }))
+    const exporter = new SigV4OtlpTraceExporter(
+      config({
+        url: 'https://vpce-0123-xray.cn-north-1.vpce.amazonaws.com.cn/v1/traces',
+      }),
+    )
     const { calls } = mockFetch()
 
     const result = await exportOnce(exporter, finishedSpans())
@@ -131,7 +153,12 @@ describe('SigV4OtlpTraceExporter', () => {
 
   it('reports FAILED when the request itself rejects', async () => {
     const exporter = new SigV4OtlpTraceExporter(config())
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('socket hang up') }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('socket hang up')
+      }),
+    )
 
     const result = await exportOnce(exporter, finishedSpans())
 
@@ -156,7 +183,9 @@ describe('SigV4OtlpTraceExporter', () => {
   })
 
   it('builds the default endpoint from the region', () => {
-    expect(defaultAwsOtlpUrl('eu-central-1')).toBe('https://xray.eu-central-1.amazonaws.com/v1/traces')
+    expect(defaultAwsOtlpUrl('eu-central-1')).toBe(
+      'https://xray.eu-central-1.amazonaws.com/v1/traces',
+    )
   })
 })
 
@@ -176,10 +205,16 @@ describe('OtelTrajectorySink aws wiring', () => {
   }
 
   it('rejects url and aws together', () => {
-    expect(() => new OtelTrajectorySink(fakeCtx(), sinkConfig({
-      url: 'http://localhost:4318/v1/traces',
-      aws: { region: 'us-east-1' },
-    }))).toThrow(/mutually exclusive/)
+    expect(
+      () =>
+        new OtelTrajectorySink(
+          fakeCtx(),
+          sinkConfig({
+            url: 'http://localhost:4318/v1/traces',
+            aws: { region: 'us-east-1' },
+          }),
+        ),
+    ).toThrow(/mutually exclusive/)
   })
 
   it('rejects an enabled sink with neither url nor aws', () => {
@@ -187,14 +222,19 @@ describe('OtelTrajectorySink aws wiring', () => {
   })
 
   it('rejects aws without a region', () => {
-    expect(() => new OtelTrajectorySink(fakeCtx(), sinkConfig({ aws: { region: '' } }))).toThrow(/aws\.region is required/)
+    expect(() => new OtelTrajectorySink(fakeCtx(), sinkConfig({ aws: { region: '' } }))).toThrow(
+      /aws\.region is required/,
+    )
   })
 
   it('ships spans to the CloudWatch endpoint signed with the env credential chain', async () => {
     vi.stubEnv('AWS_ACCESS_KEY_ID', credentials.accessKeyId)
     vi.stubEnv('AWS_SECRET_ACCESS_KEY', credentials.secretAccessKey)
     const { calls } = mockFetch()
-    const sink = new OtelTrajectorySink(fakeCtx(), sinkConfig({ aws: { region: 'ap-southeast-2' } }))
+    const sink = new OtelTrajectorySink(
+      fakeCtx(),
+      sinkConfig({ aws: { region: 'ap-southeast-2' } }),
+    )
     const session = fakeSession()
 
     sink.onEvent(session, ev('turn/start', 0, { turn: 1 }))

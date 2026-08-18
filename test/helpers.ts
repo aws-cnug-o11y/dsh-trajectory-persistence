@@ -1,5 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { Session, SessionEvent, SessionEventMap, SessionEventType, SessionHeader } from '@deepseek-ai/dsh-session'
+import type {
+  Session,
+  SessionEvent,
+  SessionEventMap,
+  SessionEventType,
+  SessionHeader,
+} from '@deepseek-ai/dsh-session'
 
 /** Minimal cordis Context stub: the sinks only use `ctx.logger()`. */
 export function fakeCtx(): Context {
@@ -23,7 +29,11 @@ export function fakeSession(header: SessionHeader = fakeHeader()): Session {
 
 let time = 1_700_000_100_000
 
-export function ev<T extends SessionEventType>(type: T, seq: number, data: SessionEventMap[T]): SessionEvent<T> {
+export function ev<T extends SessionEventType>(
+  type: T,
+  seq: number,
+  data: SessionEventMap[T],
+): SessionEvent<T> {
   time += 10
   return { type, seq, time, data } as SessionEvent<T>
 }

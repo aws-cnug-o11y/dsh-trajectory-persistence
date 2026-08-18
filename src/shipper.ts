@@ -24,7 +24,12 @@
 
 import { open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import {
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3'
 import type { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
@@ -76,9 +81,9 @@ export type S3ObjectStoreConfig = Pick<
 export function createS3ObjectStore(config: S3ObjectStoreConfig): S3ObjectStore {
   const client = new S3Client({
     region: config.region,
-    ...config.endpoint !== undefined ? { endpoint: config.endpoint } : {},
-    ...config.forcePathStyle !== undefined ? { forcePathStyle: config.forcePathStyle } : {},
-    ...config.credentials !== undefined ? { credentials: config.credentials } : {},
+    ...(config.endpoint !== undefined ? { endpoint: config.endpoint } : {}),
+    ...(config.forcePathStyle !== undefined ? { forcePathStyle: config.forcePathStyle } : {}),
+    ...(config.credentials !== undefined ? { credentials: config.credentials } : {}),
   })
   return {
     async getObject(key) {
@@ -92,22 +97,26 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): S3ObjectStore 
       }
     },
     async putObject(key, body) {
-      await client.send(new PutObjectCommand({
-        Bucket: config.bucket,
-        Key: key,
-        Body: body,
-        ContentType: key.endsWith('.json') ? 'application/json' : 'application/zstd',
-      }))
+      await client.send(
+        new PutObjectCommand({
+          Bucket: config.bucket,
+          Key: key,
+          Body: body,
+          ContentType: key.endsWith('.json') ? 'application/json' : 'application/zstd',
+        }),
+      )
     },
     async list(prefix) {
       const keys: string[] = []
       let continuationToken: string | undefined
       do {
-        const out = await client.send(new ListObjectsV2Command({
-          Bucket: config.bucket,
-          Prefix: prefix,
-          ContinuationToken: continuationToken,
-        }))
+        const out = await client.send(
+          new ListObjectsV2Command({
+            Bucket: config.bucket,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+          }),
+        )
         for (const object of out.Contents ?? []) {
           if (object.Key !== undefined) keys.push(object.Key)
         }
@@ -195,7 +204,8 @@ export class S3ShipperSink {
   ) {
     this.logger = ctx.logger('dsh-trajectory-persistence/s3')
     if (!config.bucket) throw new Error('s3 sink: bucket is required when the s3 sink is enabled')
-    if (!config.root) throw new Error('s3 sink: root is required when the s3 sink runs in ship mode')
+    if (!config.root)
+      throw new Error('s3 sink: root is required when the s3 sink runs in ship mode')
     this.store = store ?? createS3ObjectStore(config)
     this.ownsStore = store === undefined
     this.stateDir = stateDir ?? defaultShipStateDir()
@@ -224,7 +234,10 @@ export class S3ShipperSink {
    */
   poll(): Promise<void> {
     const run = this.tail.then(() => this.ready).then(() => this.pollOnce(false))
-    this.tail = run.then(() => {}, () => {})
+    this.tail = run.then(
+      () => {},
+      () => {},
+    )
     return run
   }
 
@@ -280,7 +293,7 @@ export class S3ShipperSink {
 
   private async init(): Promise<void> {
     this.state = await loadShipState(this.stateDir)
-    this.writerId = this.config.writerId ?? await getOrCreateWriterId(this.stateDir)
+    this.writerId = this.config.writerId ?? (await getOrCreateWriterId(this.stateDir))
     this.timer = setInterval(() => {
       this.poll().catch((error: unknown) => {
         this.logger.warn(`poll failed: ${String(error)}`)
@@ -376,8 +389,8 @@ export class S3ShipperSink {
     }
 
     const previous = getSessionState(this.state, tracked.sessionId)
-    const unchanged = previous !== undefined
-      && previous.lastSize === size && previous.lastMtimeNs === mtimeNs
+    const unchanged =
+      previous !== undefined && previous.lastSize === size && previous.lastMtimeNs === mtimeNs
     if (unchanged) {
       tracked.unchangedSince = Math.min(tracked.unchangedSince, now)
     } else {
@@ -390,9 +403,9 @@ export class S3ShipperSink {
       if (!tracked.warnedConflict) {
         tracked.warnedConflict = true
         this.logger.warn(
-          `session ${tracked.sessionId}: artifact size ${size} regressed below the uploaded `
-          + `watermark ${session.uploadedOffset} — the artifact was replaced or truncated; `
-          + 'skipping until the watermark holds again',
+          `session ${tracked.sessionId}: artifact size ${size} regressed below the uploaded ` +
+            `watermark ${session.uploadedOffset} — the artifact was replaced or truncated; ` +
+            'skipping until the watermark holds again',
         )
       }
       return
@@ -411,7 +424,9 @@ export class S3ShipperSink {
       frames = scanZstdFrames(buffer).frames
     } catch (error) {
       this.lastError = String(error)
-      this.logger.warn(`session ${tracked.sessionId}: artifact scan failed, skipping this pass: ${String(error)}`)
+      this.logger.warn(
+        `session ${tracked.sessionId}: artifact scan failed, skipping this pass: ${String(error)}`,
+      )
       return
     }
     if (frames.length === 0) {
@@ -433,10 +448,16 @@ export class S3ShipperSink {
         end++
       } while (end < frames.length && bytes < this.config.segmentBytes)
       const short = bytes < this.config.segmentBytes
-      const delayElapsed = tracked.firstPendingAt !== undefined
-        && now - tracked.firstPendingAt >= this.config.segmentMaxDelayMs
+      const delayElapsed =
+        tracked.firstPendingAt !== undefined &&
+        now - tracked.firstPendingAt >= this.config.segmentMaxDelayMs
       if (short && !delayElapsed && !dormant && !final) break
-      await this.uploadSegment(tracked, cursor, cursor + bytes, buffer.subarray(frames[index]!.start, frames[end - 1]!.end))
+      await this.uploadSegment(
+        tracked,
+        cursor,
+        cursor + bytes,
+        buffer.subarray(frames[index]!.start, frames[end - 1]!.end),
+      )
       cursor += bytes
       index = end
     }
@@ -453,16 +474,18 @@ export class S3ShipperSink {
       // A corrupt manifest must not crash the pass; the upload path would fail
       // on it anyway, so surface and skip the reconciliation.
       this.lastError = String(error)
-      this.logger.warn(`session ${tracked.sessionId}: manifest unreadable, using local state: ${String(error)}`)
+      this.logger.warn(
+        `session ${tracked.sessionId}: manifest unreadable, using local state: ${String(error)}`,
+      )
       return
     }
     if (!manifest) return
     if (manifest.writerId !== this.writerId && !tracked.warnedForeign) {
       tracked.warnedForeign = true
       this.logger.warn(
-        `session ${tracked.sessionId}: manifest is owned by writer ${manifest.writerId} `
-        + `(this machine is ${this.writerId}) — another machine shipped this session; `
-        + 'resuming from its watermark, do not run two shippers on one artifact',
+        `session ${tracked.sessionId}: manifest is owned by writer ${manifest.writerId} ` +
+          `(this machine is ${this.writerId}) — another machine shipped this session; ` +
+          'resuming from its watermark, do not run two shippers on one artifact',
       )
     }
     const session = this.state.sessions[tracked.sessionId] ?? initialSessionState()
@@ -497,14 +520,21 @@ export class S3ShipperSink {
    * first (so a crash between segment put and manifest write re-puts the same
    * deterministic key), manifest second, ship-state at the end of the pass.
    */
-  private async uploadSegment(tracked: TrackedSession, start: number, end: number, body: Buffer): Promise<void> {
+  private async uploadSegment(
+    tracked: TrackedSession,
+    start: number,
+    end: number,
+    body: Buffer,
+  ): Promise<void> {
     const key = this.objectKey(tracked, segmentKey(start, end))
     try {
       await withRetry(() => this.store.putObject(key, body), {
         maxRetries: this.config.maxRetries,
         baseDelayMs: this.config.retryBaseDelayMs,
         onRetry: (attempt, error, delayMs) => {
-          this.logger.warn(`upload ${key} failed (attempt ${attempt}, retry in ${delayMs}ms): ${String(error)}`)
+          this.logger.warn(
+            `upload ${key} failed (attempt ${attempt}, retry in ${delayMs}ms): ${String(error)}`,
+          )
         },
       })
     } catch (error) {
@@ -521,15 +551,22 @@ export class S3ShipperSink {
       bytes: end - start,
       uploadedAt: new Date().toISOString(),
     }
-    await updateManifest(this.store, manifestKey(this.config.prefix, tracked.projectDir, tracked.sessionId),
-      current => this.appendSegment(tracked, current, segment))
+    await updateManifest(
+      this.store,
+      manifestKey(this.config.prefix, tracked.projectDir, tracked.sessionId),
+      current => this.appendSegment(tracked, current, segment),
+    )
     this.uploadedSegments++
     this.uploadedBytes += segment.bytes
     this.lastUploadAt = Date.now()
   }
 
   /** Pure manifest transition appending one segment (idempotent on re-apply). */
-  private appendSegment(tracked: TrackedSession, current: ShipManifest | null, segment: ManifestSegment): ShipManifest {
+  private appendSegment(
+    tracked: TrackedSession,
+    current: ShipManifest | null,
+    segment: ManifestSegment,
+  ): ShipManifest {
     const base: ShipManifest = current ?? {
       version: MANIFEST_VERSION,
       sessionId: tracked.sessionId,

@@ -121,7 +121,11 @@ describe('TrajectorySinks', () => {
 
   it('reconfiguring with an equal config keeps the running sinks', async () => {
     const built = { s3: [] as SinkSpy[], otel: [] as SinkSpy[] }
-    const sinks = new TrajectorySinks(fakeCtx(), config(s3Config(), otelConfig()), spyingFactories(built))
+    const sinks = new TrajectorySinks(
+      fakeCtx(),
+      config(s3Config(), otelConfig()),
+      spyingFactories(built),
+    )
     const session = fakeSession()
     sinks.onEvent(session, ev('turn/start', 0, { turn: 1 }))
 
@@ -138,7 +142,11 @@ describe('TrajectorySinks', () => {
 
   it('drains and closes a sink when its switch flips to disabled', async () => {
     const built = { s3: [] as SinkSpy[], otel: [] as SinkSpy[] }
-    const sinks = new TrajectorySinks(fakeCtx(), config(s3Config(), otelConfig()), spyingFactories(built))
+    const sinks = new TrajectorySinks(
+      fakeCtx(),
+      config(s3Config(), otelConfig()),
+      spyingFactories(built),
+    )
     const session = fakeSession()
     sinks.onEvent(session, ev('turn/start', 0, { turn: 1 }))
 
@@ -147,7 +155,9 @@ describe('TrajectorySinks', () => {
     expect(sinks.status().s3.enabled).toBe(false)
     // The replaced sink drained in the background: buffered events uploaded, then closed.
     await waitFor(() => expect(built.s3[0].closeCount).toBe(1))
-    expect(built.s3[0].uploader!.puts.map(p => p.key)).toEqual(['dsh-trajectories/--repo-my-project--/sess-1/0-0.jsonl'])
+    expect(built.s3[0].uploader!.puts.map(p => p.key)).toEqual([
+      'dsh-trajectories/--repo-my-project--/sess-1/0-0.jsonl',
+    ])
     // The untouched otel sink kept running.
     expect(built.otel).toHaveLength(1)
     expect(built.otel[0].closeCount).toBe(0)
@@ -168,12 +178,18 @@ describe('TrajectorySinks', () => {
     await sinks.close()
 
     expect(built.s3).toHaveLength(1)
-    expect(built.s3[0].uploader!.puts.map(p => p.key)).toEqual(['dsh-trajectories/--repo-my-project--/sess-1/1-1.jsonl'])
+    expect(built.s3[0].uploader!.puts.map(p => p.key)).toEqual([
+      'dsh-trajectories/--repo-my-project--/sess-1/1-1.jsonl',
+    ])
   })
 
   it('rebuilds only the sink whose config changed', async () => {
     const built = { s3: [] as SinkSpy[], otel: [] as SinkSpy[] }
-    const sinks = new TrajectorySinks(fakeCtx(), config(s3Config(), otelConfig()), spyingFactories(built))
+    const sinks = new TrajectorySinks(
+      fakeCtx(),
+      config(s3Config(), otelConfig()),
+      spyingFactories(built),
+    )
 
     sinks.reconfigure(config(s3Config({ prefix: 'other-prefix' }), otelConfig()))
 
@@ -185,7 +201,9 @@ describe('TrajectorySinks', () => {
     const session = fakeSession()
     sinks.onEvent(session, ev('turn/start', 0, { turn: 1 }))
     await sinks.onFlush(session)
-    expect(built.s3[1].uploader!.puts.map(p => p.key)).toEqual(['other-prefix/--repo-my-project--/sess-1/0-0.jsonl'])
+    expect(built.s3[1].uploader!.puts.map(p => p.key)).toEqual([
+      'other-prefix/--repo-my-project--/sess-1/0-0.jsonl',
+    ])
     await sinks.close()
   })
 
@@ -225,8 +243,14 @@ describe('TrajectorySinks', () => {
 
   it('fails construction loudly on an invalid initial config', () => {
     const built = { s3: [] as SinkSpy[], otel: [] as SinkSpy[] }
-    expect(() => new TrajectorySinks(fakeCtx(), config(s3Config({ batchSize: 10, maxBufferedEvents: 5 })), spyingFactories(built)))
-      .toThrow(/batchSize/)
+    expect(
+      () =>
+        new TrajectorySinks(
+          fakeCtx(),
+          config(s3Config({ batchSize: 10, maxBufferedEvents: 5 })),
+          spyingFactories(built),
+        ),
+    ).toThrow(/batchSize/)
   })
 
   it('renders a human-readable status summary', () => {
@@ -243,7 +267,6 @@ describe('TrajectorySinks', () => {
     expect(unmanaged).toContain('no settings service mounted')
   })
 })
-
 
 class MemoryStore implements ObjectStore {
   readonly objects = new Map<string, Buffer>()
@@ -283,15 +306,20 @@ describe('TrajectorySinks ship mode', () => {
 
   it('rebuilds the s3 sink when the mode flips between push and ship', async () => {
     const home = await mkdtemp(join(tmpdir(), 'dsh-sinks-flip-'))
-    interface S3Spy { kind: 'push' | 'ship'; closeCount: number; closed?: Promise<void> }
+    interface S3Spy {
+      kind: 'push' | 'ship'
+      closeCount: number
+      closed?: Promise<void>
+    }
     const built: S3Spy[] = []
     try {
       const factories: SinkFactories = {
         s3: (ctx, cfg) => {
           const spy: S3Spy = { kind: cfg.mode === 'ship' ? 'ship' : 'push', closeCount: 0 }
-          const sink = cfg.mode === 'ship'
-            ? new S3ShipperSink(ctx, cfg, new MemoryStore(), join(home, 'state'))
-            : new S3TrajectorySink(ctx, cfg, new MockUploader())
+          const sink =
+            cfg.mode === 'ship'
+              ? new S3ShipperSink(ctx, cfg, new MemoryStore(), join(home, 'state'))
+              : new S3TrajectorySink(ctx, cfg, new MockUploader())
           const close = sink.close.bind(sink)
           sink.close = () => {
             spy.closeCount++
@@ -310,7 +338,9 @@ describe('TrajectorySinks ship mode', () => {
       expect(built.map(spy => spy.kind)).toEqual(['push'])
 
       // push -> ship: full config change rebuilds, the push sink drains.
-      sinks.reconfigure(config(s3Config({ mode: 'ship', root: shipRoot, pollIntervalMs: 3_600_000 })))
+      sinks.reconfigure(
+        config(s3Config({ mode: 'ship', root: shipRoot, pollIntervalMs: 3_600_000 })),
+      )
       expect(built.map(spy => spy.kind)).toEqual(['push', 'ship'])
       await waitFor(() => expect(built[0].closeCount).toBe(1))
       expect(built[1].closeCount).toBe(0)

@@ -41,18 +41,28 @@ function config(otel: OtelSinkConfig): ResolvedConfig {
 
 describe('validateConfig (otel aws)', () => {
   it('rejects an enabled otel sink with neither url nor aws', () => {
-    expect(() => validateConfig(config(otelConfig()))).toThrow(/url or sinks\.otel\.aws is required/)
+    expect(() => validateConfig(config(otelConfig()))).toThrow(
+      /url or sinks\.otel\.aws is required/,
+    )
   })
 
   it('rejects url and aws together (mutually exclusive)', () => {
-    expect(() => validateConfig(config(otelConfig({
-      url: 'http://localhost:4318/v1/traces',
-      aws: { region: 'us-east-1' },
-    })))).toThrow(/mutually exclusive/)
+    expect(() =>
+      validateConfig(
+        config(
+          otelConfig({
+            url: 'http://localhost:4318/v1/traces',
+            aws: { region: 'us-east-1' },
+          }),
+        ),
+      ),
+    ).toThrow(/mutually exclusive/)
   })
 
   it('rejects an aws block without a region', () => {
-    expect(() => validateConfig(config(otelConfig({ aws: { region: '' } })))).toThrow(/aws\.region is required/)
+    expect(() => validateConfig(config(otelConfig({ aws: { region: '' } })))).toThrow(
+      /aws\.region is required/,
+    )
   })
 
   it('accepts aws with a region and no url', () => {
@@ -60,13 +70,24 @@ describe('validateConfig (otel aws)', () => {
   })
 
   it('accepts aws with an endpoint override', () => {
-    expect(() => validateConfig(config(otelConfig({
-      aws: { region: 'cn-north-1', url: 'https://xray.cn-north-1.amazonaws.com.cn/v1/traces' },
-    })))).not.toThrow()
+    expect(() =>
+      validateConfig(
+        config(
+          otelConfig({
+            aws: {
+              region: 'cn-north-1',
+              url: 'https://xray.cn-north-1.amazonaws.com.cn/v1/traces',
+            },
+          }),
+        ),
+      ),
+    ).not.toThrow()
   })
 
   it('still accepts a plain url endpoint without aws', () => {
-    expect(() => validateConfig(config(otelConfig({ url: 'http://localhost:4318/v1/traces' })))).not.toThrow()
+    expect(() =>
+      validateConfig(config(otelConfig({ url: 'http://localhost:4318/v1/traces' }))),
+    ).not.toThrow()
   })
 })
 
@@ -92,12 +113,14 @@ describe('Config schema (otel aws)', () => {
   })
 
   it('refuses an aws block without region at schema level', () => {
-    expect(() => Config({
-      sinks: {
-        s3: {},
-        otel: { enabled: true, aws: {} },
-      },
-    })).toThrow(/region/)
+    expect(() =>
+      Config({
+        sinks: {
+          s3: {},
+          otel: { enabled: true, aws: {} },
+        },
+      }),
+    ).toThrow(/region/)
   })
 })
 
@@ -149,20 +172,32 @@ describe('Config schema (s3 ship mode)', () => {
 
 describe('validateConfig (s3 ship mode)', () => {
   it('rejects ship mode with an empty root when enabled', () => {
-    expect(() => validateConfig({
-      sinks: { s3: s3Config({ enabled: true, bucket: 'b', mode: 'ship', root: '' }), otel: otelConfig({ enabled: false }) },
-    })).toThrow(/sinks\.s3\.root is required/)
+    expect(() =>
+      validateConfig({
+        sinks: {
+          s3: s3Config({ enabled: true, bucket: 'b', mode: 'ship', root: '' }),
+          otel: otelConfig({ enabled: false }),
+        },
+      }),
+    ).toThrow(/sinks\.s3\.root is required/)
   })
 
   it('accepts ship mode with a root when enabled', () => {
-    expect(() => validateConfig({
-      sinks: { s3: s3Config({ enabled: true, bucket: 'b', mode: 'ship', root: '/data/sessions' }), otel: otelConfig({ enabled: false }) },
-    })).not.toThrow()
+    expect(() =>
+      validateConfig({
+        sinks: {
+          s3: s3Config({ enabled: true, bucket: 'b', mode: 'ship', root: '/data/sessions' }),
+          otel: otelConfig({ enabled: false }),
+        },
+      }),
+    ).not.toThrow()
   })
 
   it('tolerates an empty root when ship mode is disabled', () => {
-    expect(() => validateConfig({
-      sinks: { s3: s3Config({ mode: 'ship', root: '' }), otel: otelConfig({ enabled: false }) },
-    })).not.toThrow()
+    expect(() =>
+      validateConfig({
+        sinks: { s3: s3Config({ mode: 'ship', root: '' }), otel: otelConfig({ enabled: false }) },
+      }),
+    ).not.toThrow()
   })
 })

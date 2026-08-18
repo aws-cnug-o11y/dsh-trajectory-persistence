@@ -36,7 +36,9 @@ export async function withRetry<T>(task: () => Promise<T>, options: RetryOptions
       lastError = error
       if (attempt === maxRetries) break
       // Cap the exponent so the delay stays below setTimeout's 2^31-1 ms limit.
-      const delay = Math.round(options.baseDelayMs * 2 ** Math.min(attempt, 20) * (1 + Math.random() * 0.25))
+      const delay = Math.round(
+        options.baseDelayMs * 2 ** Math.min(attempt, 20) * (1 + Math.random() * 0.25),
+      )
       try {
         options.onRetry?.(attempt + 1, error, delay)
       } catch {

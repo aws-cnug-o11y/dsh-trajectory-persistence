@@ -123,8 +123,13 @@ describe('syncDown', () => {
   })
 
   it('round-trips an official artifact through the shipper byte-exactly', async () => {
-    const header = frame('{"type":"session","version":0,"id":"sess-1","createdAt":1700000000000,"delegationDepth":0}\n')
-    const events = [frame('{"type":"turn/start","seq":0}\n'), frame('{"type":"turn/end","seq":1}\n')]
+    const header = frame(
+      '{"type":"session","version":0,"id":"sess-1","createdAt":1700000000000,"delegationDepth":0}\n',
+    )
+    const events = [
+      frame('{"type":"turn/start","seq":0}\n'),
+      frame('{"type":"turn/end","seq":1}\n'),
+    ]
     const artifact = Buffer.concat([header, ...events])
     await mkdir(join(root, PROJ, SESS), { recursive: true })
     await writeFile(join(root, PROJ, SESS, ARTIFACT_NAME), artifact)
@@ -149,7 +154,13 @@ describe('syncDown', () => {
 
     const summary = await down()
     expect(summary.sessions).toEqual([
-      { projectDir: PROJ, sessionId: SESS, status: 'skipped', bytes: artifact.length, reason: 'already in sync' },
+      {
+        projectDir: PROJ,
+        sessionId: SESS,
+        status: 'skipped',
+        bytes: artifact.length,
+        reason: 'already in sync',
+      },
     ])
   })
 
@@ -185,7 +196,9 @@ describe('syncDown', () => {
     expect(summary.sessions[0]).toMatchObject({ status: 'conflict', bytes: 0 })
     expect(summary.sessions[0]!.reason).toMatch(/diverged.*--force/s)
     expect((await readFile(join(root, PROJ, SESS, ARTIFACT_NAME))).equals(diverged)).toBe(true)
-    expect((await readdir(join(root, PROJ, SESS))).filter(name => name.includes('.bak-'))).toEqual([])
+    expect((await readdir(join(root, PROJ, SESS))).filter(name => name.includes('.bak-'))).toEqual(
+      [],
+    )
   })
 
   it('overwrites a diverged local artifact with force, backing the original up', async () => {
@@ -232,8 +245,12 @@ describe('syncDown', () => {
     expect(summary.sessions).toEqual([
       { projectDir: PROJ, sessionId: other, status: 'restored', bytes: frame(`${other}\n`).length },
     ])
-    expect((await readFile(join(root, PROJ, other, ARTIFACT_NAME))).equals(frame(`${other}\n`))).toBe(true)
-    await expect(readFile(join(root, PROJ, SESS, ARTIFACT_NAME))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(
+      (await readFile(join(root, PROJ, other, ARTIFACT_NAME))).equals(frame(`${other}\n`)),
+    ).toBe(true)
+    await expect(readFile(join(root, PROJ, SESS, ARTIFACT_NAME))).rejects.toMatchObject({
+      code: 'ENOENT',
+    })
   })
 
   it('errors explicitly on an unsupported manifest version', async () => {
@@ -251,13 +268,23 @@ describe('syncDown', () => {
     const foreign = manifest({
       format: { kind: 'jsonl.zstd', sessionFormatVersion: 1 },
       watermark: 5,
-      segments: [{ key: 'unused', offsetStart: 0, offsetEnd: 5, bytes: 5, uploadedAt: new Date().toISOString() }],
+      segments: [
+        {
+          key: 'unused',
+          offsetStart: 0,
+          offsetEnd: 5,
+          bytes: 5,
+          uploadedAt: new Date().toISOString(),
+        },
+      ],
     })
     store.objects.set(key, Buffer.from(serializeManifest(foreign)))
 
     const summary = await down()
     expect(summary.sessions[0]!.status).toBe('error')
-    expect(summary.sessions[0]!.reason).toMatch(/unsupported session format version 1 \(expected 0\)/)
+    expect(summary.sessions[0]!.reason).toMatch(
+      /unsupported session format version 1 \(expected 0\)/,
+    )
   })
 
   it('errors explicitly when a segment object is missing', async () => {
@@ -281,12 +308,17 @@ describe('syncDown', () => {
     await ship()
     const key = manifestKey('dsh-trajectories', PROJ, SESS)
     const stored = JSON.parse(store.objects.get(key)!.toString('utf8')) as ShipManifest
-    store.objects.set(key, Buffer.from(serializeManifest({ ...stored, watermark: stored.watermark + 10 })))
+    store.objects.set(
+      key,
+      Buffer.from(serializeManifest({ ...stored, watermark: stored.watermark + 10 })),
+    )
     await rm(root, { recursive: true, force: true })
 
     const summary = await down()
     expect(summary.sessions[0]!.status).toBe('error')
-    expect(summary.sessions[0]!.reason).toMatch(/segments end at offset \d+ but the watermark is \d+/)
+    expect(summary.sessions[0]!.reason).toMatch(
+      /segments end at offset \d+ but the watermark is \d+/,
+    )
   })
 
   it('errors explicitly on a segment gap in the manifest', async () => {
@@ -297,7 +329,10 @@ describe('syncDown', () => {
     const key = manifestKey('dsh-trajectories', PROJ, SESS)
     const stored = JSON.parse(store.objects.get(key)!.toString('utf8')) as ShipManifest
     // Drop the first segment: the remaining list no longer starts at offset 0.
-    store.objects.set(key, Buffer.from(serializeManifest({ ...stored, segments: stored.segments.slice(1) })))
+    store.objects.set(
+      key,
+      Buffer.from(serializeManifest({ ...stored, segments: stored.segments.slice(1) })),
+    )
     await rm(root, { recursive: true, force: true })
 
     const summary = await down()
@@ -316,7 +351,13 @@ describe('syncDown', () => {
 
     const summary = await down()
     expect(summary.sessions).toEqual([
-      { projectDir: PROJ, sessionId: SESS, status: 'skipped', bytes: 0, reason: 'manifest watermark is 0 — nothing shipped yet' },
+      {
+        projectDir: PROJ,
+        sessionId: SESS,
+        status: 'skipped',
+        bytes: 0,
+        reason: 'manifest watermark is 0 — nothing shipped yet',
+      },
     ])
   })
 
@@ -325,14 +366,16 @@ describe('syncDown', () => {
     await mkdir(join(root, PROJ, SESS), { recursive: true })
     await writeFile(join(root, PROJ, SESS, ARTIFACT_NAME), Buffer.concat(parts))
     await ship()
-    expect(store.objects.has(
-      `dsh-trajectories/${PROJ}/${SESS}/${segmentKey(0, parts[0]!.length)}`,
-    )).toBe(true)
+    expect(
+      store.objects.has(`dsh-trajectories/${PROJ}/${SESS}/${segmentKey(0, parts[0]!.length)}`),
+    ).toBe(true)
     await rm(root, { recursive: true, force: true })
 
     const lines: string[] = []
     const summary = await down({ log: line => lines.push(line) })
     expect(summary.sessions[0]!.status).toBe('restored')
-    expect(lines).toEqual([expect.stringMatching(/^restored {2}--repo-my-project--\/sess-1 {2}\d+ bytes$/)])
+    expect(lines).toEqual([
+      expect.stringMatching(/^restored {2}--repo-my-project--\/sess-1 {2}\d+ bytes$/),
+    ])
   })
 })

@@ -144,8 +144,15 @@ export async function readManifest(store: ObjectStore, key: string): Promise<Shi
  * @param key - full manifest key.
  * @param manifest - manifest to persist.
  */
-export async function writeManifest(store: ObjectStore, key: string, manifest: ShipManifest): Promise<void> {
-  await store.putObject(key, serializeManifest({ ...manifest, updatedAt: new Date().toISOString() }))
+export async function writeManifest(
+  store: ObjectStore,
+  key: string,
+  manifest: ShipManifest,
+): Promise<void> {
+  await store.putObject(
+    key,
+    serializeManifest({ ...manifest, updatedAt: new Date().toISOString() }),
+  )
 }
 
 /** Compare two manifests ignoring the `updatedAt` stamp. */

@@ -18,7 +18,11 @@ function concat(...parts: Buffer[]): Buffer {
 
 describe('scanZstdFrames', () => {
   it('scans a multi-frame concatenation and every frame round-trips', () => {
-    const payloads = ['{"type":"session","id":"s1"}\n', '{"type":"a"}\n', '{"type":"b"}\n{"type":"c"}\n']
+    const payloads = [
+      '{"type":"session","id":"s1"}\n',
+      '{"type":"a"}\n',
+      '{"type":"b"}\n{"type":"c"}\n',
+    ]
     const parts = payloads.map(frame)
     const scan = scanZstdFrames(concat(...parts))
     expect(scan.tornStart).toBeUndefined()
@@ -83,7 +87,7 @@ describe('scanZstdFrames', () => {
 
   it('rejects an invalid frame magic', () => {
     const bad = Buffer.from(frame('data'))
-    bad.writeUInt32LE(0xDEADBEEF, 0)
+    bad.writeUInt32LE(0xdeadbeef, 0)
     expect(() => scanZstdFrames(bad)).toThrow(/invalid frame magic at byte 0/)
   })
 
@@ -98,7 +102,7 @@ describe('scanZstdFrames', () => {
     // Hand-built frame: magic, descriptor (single segment, 1-byte content size,
     // no checksum), content size, then one block with the reserved type 0x03.
     const bad = Buffer.alloc(4 + 1 + 1 + 3)
-    bad.writeUInt32LE(0xFD2FB528, 0)
+    bad.writeUInt32LE(0xfd2fb528, 0)
     bad.writeUInt8(0x20, 4) // single-segment descriptor
     bad.writeUInt8(0, 5) // content size 0
     bad.writeUIntLE(0b111, 6, 3) // lastBlock=1, blockType=3, size=0

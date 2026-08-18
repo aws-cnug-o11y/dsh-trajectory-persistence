@@ -30,9 +30,8 @@ export interface SinkFactories {
 }
 
 const defaultFactories: SinkFactories = {
-  s3: (ctx, config) => config.mode === 'ship'
-    ? new S3ShipperSink(ctx, config)
-    : new S3TrajectorySink(ctx, config),
+  s3: (ctx, config) =>
+    config.mode === 'ship' ? new S3ShipperSink(ctx, config) : new S3TrajectorySink(ctx, config),
   otel: (ctx, config) => new OtelTrajectorySink(ctx, config),
 }
 
@@ -168,7 +167,9 @@ export class TrajectorySinks {
       if (old) this.drain(old, 'otel')
     } catch (error) {
       if (!this.initialized) throw error
-      this.logger.warn(`rebuilding the otel sink failed, keeping the previous one: ${String(error)}`)
+      this.logger.warn(
+        `rebuilding the otel sink failed, keeping the previous one: ${String(error)}`,
+      )
     }
   }
 

@@ -49,8 +49,7 @@ export default defineConfig({
     ],
 
     editLink: {
-      pattern:
-        'https://github.com/aws-cnug-o11y/dsh-trajectory-persistence/edit/main/docs/:path',
+      pattern: 'https://github.com/aws-cnug-o11y/dsh-trajectory-persistence/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
 

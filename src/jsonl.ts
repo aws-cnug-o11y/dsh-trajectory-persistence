@@ -42,12 +42,12 @@ export function toHeaderLine(header: SessionHeader): HeaderLine {
     version: header.version,
     id: header.id,
     createdAt: header.createdAt,
-    ...header.cwd !== undefined ? { cwd: header.cwd } : {},
-    ...header.parentSession !== undefined ? { parentSession: header.parentSession } : {},
-    ...header.seedLength !== undefined ? { seedLength: header.seedLength } : {},
-    ...header.origin !== undefined ? { origin: header.origin } : {},
+    ...(header.cwd !== undefined ? { cwd: header.cwd } : {}),
+    ...(header.parentSession !== undefined ? { parentSession: header.parentSession } : {}),
+    ...(header.seedLength !== undefined ? { seedLength: header.seedLength } : {}),
+    ...(header.origin !== undefined ? { origin: header.origin } : {}),
     delegationDepth: header.delegationDepth ?? 0,
-    ...header.agentPreset !== undefined ? { agentPreset: header.agentPreset } : {},
+    ...(header.agentPreset !== undefined ? { agentPreset: header.agentPreset } : {}),
   }
 }
 

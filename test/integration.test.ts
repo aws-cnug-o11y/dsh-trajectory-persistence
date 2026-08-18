@@ -98,7 +98,9 @@ describe('plugin integration (real cordis context)', () => {
     await tick()
 
     expect(commandDefined()).toBe(true)
-    expect(ctx.settings.get(ns)).toMatchObject({ sinks: { s3: { enabled: false }, otel: { enabled: false } } })
+    expect(ctx.settings.get(ns)).toMatchObject({
+      sinks: { s3: { enabled: false }, otel: { enabled: false } },
+    })
     const text = statusText()
     expect(text).toContain('settings: managed')
     expect(text).toContain('s3 sink: disabled')
@@ -122,8 +124,9 @@ describe('plugin integration (real cordis context)', () => {
     const { ctx, statusText } = setup()
     await tick()
 
-    await expect(ctx.settings.update(ns, { sinks: { otel: { enabled: true } } }))
-      .rejects.toThrow(/url/)
+    await expect(ctx.settings.update(ns, { sinks: { otel: { enabled: true } } })).rejects.toThrow(
+      /url/,
+    )
     // The rejected write never committed: the otel sink stays disabled.
     await tick()
     expect(statusText()).toContain('otel sink: disabled')

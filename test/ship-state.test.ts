@@ -74,7 +74,11 @@ describe('session progress', () => {
     const state = emptyState()
     expect(getSessionState(state, 'nope')).toBeUndefined()
     expect(initialSessionState()).toEqual({
-      uploadedOffset: 0, lastSize: 0, lastMtimeNs: 0, dormant: false, conflicted: false,
+      uploadedOffset: 0,
+      lastSize: 0,
+      lastMtimeNs: 0,
+      dormant: false,
+      conflicted: false,
     })
   })
 

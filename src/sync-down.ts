@@ -96,9 +96,11 @@ export async function syncDown(options: SyncDownOptions): Promise<SyncDownSummar
     // Layout is exactly {projectDir}/{sessionId}/_manifest.json.
     if (parts.length !== 3) continue
     const [projectDir, sessionId] = parts as [string, string]
-    if (options.sessionId !== undefined
-      && sessionId !== options.sessionId
-      && sessionId !== encodeSegment(options.sessionId)) {
+    if (
+      options.sessionId !== undefined &&
+      sessionId !== options.sessionId &&
+      sessionId !== encodeSegment(options.sessionId)
+    ) {
       continue
     }
     const result = await syncSession(options, projectDir, sessionId, key)
@@ -142,20 +144,29 @@ async function syncSession(
     }
     const manifest = parseManifest(body.toString('utf8')) // refuses version !== MANIFEST_VERSION
     if (manifest.format?.kind !== 'jsonl.zstd') {
-      return { ...base, status: 'error', reason: `unsupported artifact format ${String(manifest.format?.kind)}` }
+      return {
+        ...base,
+        status: 'error',
+        reason: `unsupported artifact format ${String(manifest.format?.kind)}`,
+      }
     }
     if (manifest.format.sessionFormatVersion !== SESSION_FORMAT_VERSION) {
       return {
         ...base,
         status: 'error',
-        reason: `unsupported session format version ${String(manifest.format.sessionFormatVersion)} `
-          + `(expected ${SESSION_FORMAT_VERSION})`,
+        reason:
+          `unsupported session format version ${String(manifest.format.sessionFormatVersion)} ` +
+          `(expected ${SESSION_FORMAT_VERSION})`,
       }
     }
     validateSegments(manifest)
     const remote = await downloadSegments(options.store, manifest)
     if (remote.length === 0) {
-      return { ...base, status: 'skipped', reason: 'manifest watermark is 0 — nothing shipped yet' }
+      return {
+        ...base,
+        status: 'skipped',
+        reason: 'manifest watermark is 0 — nothing shipped yet',
+      }
     }
     return await publishArtifact(options, projectDir, sessionId, remote)
   } catch (error) {
@@ -172,12 +183,17 @@ function validateSegments(manifest: ShipManifest): void {
   let cursor = 0
   for (const segment of manifest.segments) {
     if (segment.offsetStart !== cursor) {
-      throw new Error(`segment gap/overlap: expected offset ${cursor}, segment starts at ${segment.offsetStart}`)
-    }
-    if (segment.offsetEnd <= segment.offsetStart || segment.offsetEnd - segment.offsetStart !== segment.bytes) {
       throw new Error(
-        `segment ${segment.key}: inconsistent offsets `
-        + `(${segment.offsetStart}-${segment.offsetEnd}, bytes ${segment.bytes})`,
+        `segment gap/overlap: expected offset ${cursor}, segment starts at ${segment.offsetStart}`,
+      )
+    }
+    if (
+      segment.offsetEnd <= segment.offsetStart ||
+      segment.offsetEnd - segment.offsetStart !== segment.bytes
+    ) {
+      throw new Error(
+        `segment ${segment.key}: inconsistent offsets ` +
+          `(${segment.offsetStart}-${segment.offsetEnd}, bytes ${segment.bytes})`,
       )
     }
     cursor = segment.offsetEnd
@@ -188,13 +204,18 @@ function validateSegments(manifest: ShipManifest): void {
 }
 
 /** Download segments in manifest order and concatenate them into the artifact bytes. */
-async function downloadSegments(store: ListableObjectStore, manifest: ShipManifest): Promise<Buffer> {
+async function downloadSegments(
+  store: ListableObjectStore,
+  manifest: ShipManifest,
+): Promise<Buffer> {
   const chunks: Buffer[] = []
   for (const segment of manifest.segments) {
     const data = await store.getObject(segment.key)
     if (data === null) throw new Error(`segment ${segment.key} is missing`)
     if (data.length !== segment.bytes) {
-      throw new Error(`segment ${segment.key} is ${data.length} bytes, manifest says ${segment.bytes}`)
+      throw new Error(
+        `segment ${segment.key} is ${data.length} bytes, manifest says ${segment.bytes}`,
+      )
     }
     chunks.push(data)
   }
@@ -227,14 +248,18 @@ async function publishArtifact(
         ...base,
         status: 'conflict',
         bytes: 0,
-        reason: `local artifact diverged (${local.length} bytes local vs ${remote.length} bytes remote); `
-          + 'refusing to overwrite without --force',
+        reason:
+          `local artifact diverged (${local.length} bytes local vs ${remote.length} bytes remote); ` +
+          'refusing to overwrite without --force',
       }
     }
   }
 
   await mkdir(dir, { recursive: true })
-  const temp = join(dir, `.${ARTIFACT_NAME}.sync-down-${process.pid}-${randomBytes(4).toString('hex')}`)
+  const temp = join(
+    dir,
+    `.${ARTIFACT_NAME}.sync-down-${process.pid}-${randomBytes(4).toString('hex')}`,
+  )
   try {
     await writeAndFsync(temp, remote)
     if (local === null) {
@@ -243,7 +268,12 @@ async function publishArtifact(
         await link(temp, target)
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-          return { ...base, status: 'conflict', bytes: 0, reason: `${target} appeared concurrently; left untouched` }
+          return {
+            ...base,
+            status: 'conflict',
+            bytes: 0,
+            reason: `${target} appeared concurrently; left untouched`,
+          }
         }
         throw error
       }

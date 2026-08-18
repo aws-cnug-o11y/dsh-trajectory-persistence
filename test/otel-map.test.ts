@@ -1,6 +1,10 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { SpanStatusCode } from '@opentelemetry/api'
-import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base'
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base'
 import { GenAISpanMapper, OtelTrajectorySink } from '../src/otel-sink.js'
 import type { OtelSinkConfig } from '../src/config.js'
@@ -30,17 +34,50 @@ describe('GenAISpanMapper', () => {
     const session = fakeSession()
 
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
-    mapper.handle(session, ev('request/context', 1, { provider: 'deepseek-official', model: 'deepseek-v4-flash' }))
+    mapper.handle(
+      session,
+      ev('request/context', 1, { provider: 'deepseek-official', model: 'deepseek-v4-flash' }),
+    )
     mapper.handle(session, ev('step/start', 2, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('assistant/chunk', 3, { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'hello ' } }))
-    mapper.handle(session, ev('assistant/chunk', 4, { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'world' } }))
-    mapper.handle(session, ev('assistant/message', 5, {
-      turn: 1, step: 1,
-      message: { id: 'a1', role: 'assistant', content: [], source: { kind: 'model' } } as never,
-      usage: { inputTokens: 120, outputTokens: 30, cacheReadTokens: 12 },
-    }))
-    mapper.handle(session, ev('tool/call', 6, { turn: 1, step: 1, callId: 'call-1', name: 'bash', arguments: '{"cmd":"ls"}' }))
-    mapper.handle(session, ev('tool/result', 7, { turn: 1, step: 1, message: toolResultMessage('call-1') }))
+    mapper.handle(
+      session,
+      ev('assistant/chunk', 3, {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'hello ' },
+      }),
+    )
+    mapper.handle(
+      session,
+      ev('assistant/chunk', 4, {
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'world' },
+      }),
+    )
+    mapper.handle(
+      session,
+      ev('assistant/message', 5, {
+        turn: 1,
+        step: 1,
+        message: { id: 'a1', role: 'assistant', content: [], source: { kind: 'model' } } as never,
+        usage: { inputTokens: 120, outputTokens: 30, cacheReadTokens: 12 },
+      }),
+    )
+    mapper.handle(
+      session,
+      ev('tool/call', 6, {
+        turn: 1,
+        step: 1,
+        callId: 'call-1',
+        name: 'bash',
+        arguments: '{"cmd":"ls"}',
+      }),
+    )
+    mapper.handle(
+      session,
+      ev('tool/result', 7, { turn: 1, step: 1, message: toolResultMessage('call-1') }),
+    )
     mapper.handle(session, ev('step/end', 8, { turn: 1, step: 1 }))
     mapper.handle(session, ev('turn/end', 9, { turn: 1, reason: { kind: 'completed' } as never }))
 
@@ -81,12 +118,19 @@ describe('GenAISpanMapper', () => {
     const session = fakeSession()
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
     mapper.handle(session, ev('step/start', 1, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('tool/call', 2, { turn: 1, step: 1, callId: 'c9', name: 'read', arguments: '{}' }))
-    mapper.handle(session, ev('tool/result', 3, {
-      turn: 1, step: 1,
-      message: toolResultMessage('c9', true),
-      error: { name: 'ToolError', code: 'ENOENT' },
-    }))
+    mapper.handle(
+      session,
+      ev('tool/call', 2, { turn: 1, step: 1, callId: 'c9', name: 'read', arguments: '{}' }),
+    )
+    mapper.handle(
+      session,
+      ev('tool/result', 3, {
+        turn: 1,
+        step: 1,
+        message: toolResultMessage('c9', true),
+        error: { name: 'ToolError', code: 'ENOENT' },
+      }),
+    )
 
     const tool = exporter.getFinishedSpans().find(s => s.name === 'execute_tool')!
     expect(tool.status.code).toBe(SpanStatusCode.ERROR)
@@ -99,11 +143,17 @@ describe('GenAISpanMapper', () => {
     const session = fakeSession()
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
     mapper.handle(session, ev('step/start', 1, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('tool/call', 2, { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{}' }))
+    mapper.handle(
+      session,
+      ev('tool/call', 2, { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{}' }),
+    )
     expect(exporter.getFinishedSpans()).toHaveLength(0)
 
     mapper.endSession(session)
-    const names = exporter.getFinishedSpans().map(s => s.name).sort()
+    const names = exporter
+      .getFinishedSpans()
+      .map(s => s.name)
+      .sort()
     expect(names).toEqual(['chat', 'execute_tool', 'gen_ai.turn'])
   })
 
@@ -112,8 +162,14 @@ describe('GenAISpanMapper', () => {
     const session = fakeSession()
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
     mapper.handle(session, ev('step/start', 1, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('tool/call', 2, { turn: 1, step: 1, callId: 'c2', name: 'bash', arguments: '{}' }))
-    mapper.handle(session, ev('turn/end', 3, { turn: 1, reason: { kind: 'aborted', reason: 'user' } as never }))
+    mapper.handle(
+      session,
+      ev('tool/call', 2, { turn: 1, step: 1, callId: 'c2', name: 'bash', arguments: '{}' }),
+    )
+    mapper.handle(
+      session,
+      ev('turn/end', 3, { turn: 1, reason: { kind: 'aborted', reason: 'user' } as never }),
+    )
 
     const tool = exporter.getFinishedSpans().find(s => s.name === 'execute_tool')!
     expect(tool.status.code).toBe(SpanStatusCode.ERROR)
@@ -122,8 +178,20 @@ describe('GenAISpanMapper', () => {
   it('truncates oversized tool-call arguments attributes', () => {
     const { exporter, mapper } = setup()
     const session = fakeSession()
-    mapper.handle(session, ev('tool/call', 0, { turn: 1, step: 1, callId: 'big', name: 'write', arguments: 'x'.repeat(10_000) }))
-    mapper.handle(session, ev('tool/result', 1, { turn: 1, step: 1, message: toolResultMessage('big') }))
+    mapper.handle(
+      session,
+      ev('tool/call', 0, {
+        turn: 1,
+        step: 1,
+        callId: 'big',
+        name: 'write',
+        arguments: 'x'.repeat(10_000),
+      }),
+    )
+    mapper.handle(
+      session,
+      ev('tool/result', 1, { turn: 1, step: 1, message: toolResultMessage('big') }),
+    )
     const tool = exporter.getFinishedSpans().find(s => s.name === 'execute_tool')!
     expect(String(tool.attributes['gen_ai.tool.call.arguments'])).toHaveLength(8192)
   })
@@ -133,7 +201,10 @@ describe('GenAISpanMapper', () => {
     const session = fakeSession()
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
     mapper.handle(session, ev('step/start', 1, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('tool/call', 2, { turn: 1, step: 1, callId: 'c3', name: 'bash', arguments: '{}' }))
+    mapper.handle(
+      session,
+      ev('tool/call', 2, { turn: 1, step: 1, callId: 'c3', name: 'bash', arguments: '{}' }),
+    )
     expect(exporter.getFinishedSpans()).toHaveLength(0)
 
     mapper.endAll()
@@ -149,12 +220,21 @@ describe('GenAISpanMapper', () => {
     const session = fakeSession()
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
     mapper.handle(session, ev('step/start', 1, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('tool/call', 2, { turn: 1, step: 1, callId: 't1', name: 'bash', arguments: '{}' }))
+    mapper.handle(
+      session,
+      ev('tool/call', 2, { turn: 1, step: 1, callId: 't1', name: 'bash', arguments: '{}' }),
+    )
     mapper.handle(session, ev('turn/start', 3, { turn: 2 }))
     mapper.handle(session, ev('step/start', 4, { turn: 2, step: 1 }))
-    mapper.handle(session, ev('tool/call', 5, { turn: 2, step: 1, callId: 't2', name: 'read', arguments: '{}' }))
+    mapper.handle(
+      session,
+      ev('tool/call', 5, { turn: 2, step: 1, callId: 't2', name: 'read', arguments: '{}' }),
+    )
 
-    mapper.handle(session, ev('turn/end', 6, { turn: 1, reason: { kind: 'aborted', reason: 'user' } as never }))
+    mapper.handle(
+      session,
+      ev('turn/end', 6, { turn: 1, reason: { kind: 'aborted', reason: 'user' } as never }),
+    )
 
     const tools = exporter.getFinishedSpans().filter(s => s.name === 'execute_tool')
     expect(tools).toHaveLength(1)
@@ -174,10 +254,16 @@ describe('GenAISpanMapper', () => {
 
     mapper.handle(session, ev('turn/start', 0, { turn: 1 }))
     mapper.handle(session, ev('step/start', 1, { turn: 1, step: 1 }))
-    mapper.handle(session, ev('tool/call', 2, { turn: 1, step: 1, callId: 'c4', name: 'bash', arguments: '{}' }))
+    mapper.handle(
+      session,
+      ev('tool/call', 2, { turn: 1, step: 1, callId: 'c4', name: 'bash', arguments: '{}' }),
+    )
     expect(mapper.stats()).toEqual({ sessions: 1, openSpans: 3 })
 
-    mapper.handle(session, ev('tool/result', 3, { turn: 1, step: 1, message: toolResultMessage('c4') }))
+    mapper.handle(
+      session,
+      ev('tool/result', 3, { turn: 1, step: 1, message: toolResultMessage('c4') }),
+    )
     mapper.handle(session, ev('step/end', 4, { turn: 1, step: 1 }))
     mapper.handle(session, ev('turn/end', 5, { turn: 1, reason: { kind: 'completed' } as never }))
     // The session entry stays until disposal even with every span closed.

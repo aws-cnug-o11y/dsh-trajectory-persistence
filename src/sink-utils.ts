@@ -123,19 +123,28 @@ export abstract class BufferedPartSink {
     ctx: Context,
     private readonly limits: PartSinkLimits,
     /** Sink kind used in logger and error messages (e.g. `s3`). */
-    private readonly kind: string,
+    kind: string,
   ) {
     if (!Number.isInteger(limits.batchSize) || limits.batchSize < 1) {
-      throw new Error(`${kind} sink: batchSize must be a positive integer, got ${String(limits.batchSize)}`)
+      throw new Error(
+        `${kind} sink: batchSize must be a positive integer, got ${String(limits.batchSize)}`,
+      )
     }
     if (limits.batchSize > limits.maxBufferedEvents) {
-      throw new Error(`${kind} sink: batchSize (${limits.batchSize}) must not exceed maxBufferedEvents (${limits.maxBufferedEvents})`)
+      throw new Error(
+        `${kind} sink: batchSize (${limits.batchSize}) must not exceed maxBufferedEvents (${limits.maxBufferedEvents})`,
+      )
     }
     this.logger = ctx.logger(`dsh-trajectory-persistence/${kind}`)
   }
 
   /** Upload one serialized JSONL part; must reject on failure (the base class retries). */
-  protected abstract uploadPart(header: SessionHeader, seqStart: number, seqEnd: number, body: string): Promise<void>
+  protected abstract uploadPart(
+    header: SessionHeader,
+    seqStart: number,
+    seqEnd: number,
+    body: string,
+  ): Promise<void>
 
   /** Short identifier of one part for log lines (object key, file name, …). */
   protected abstract partName(header: SessionHeader, seqStart: number, seqEnd: number): string
@@ -158,7 +167,9 @@ export abstract class BufferedPartSink {
     state.buffer.push(event)
     this.droppedEvents += state.buffer.dropped - droppedBefore
     if (state.buffer.dropped > 0 && state.buffer.dropped % 100 === 1) {
-      this.logger.warn(`session ${session.id}: buffer overflow dropped ${state.buffer.dropped} events (uploads stalled?)`)
+      this.logger.warn(
+        `session ${session.id}: buffer overflow dropped ${state.buffer.dropped} events (uploads stalled?)`,
+      )
     }
     if (state.buffer.size >= this.limits.batchSize) {
       this.enqueueFlush(state)
@@ -280,7 +291,9 @@ export abstract class BufferedPartSink {
         maxRetries: this.limits.maxRetries,
         baseDelayMs: this.limits.retryBaseDelayMs,
         onRetry: (attempt, error, delayMs) => {
-          this.logger.warn(`upload ${name} failed (attempt ${attempt}, retry in ${delayMs}ms): ${String(error)}`)
+          this.logger.warn(
+            `upload ${name} failed (attempt ${attempt}, retry in ${delayMs}ms): ${String(error)}`,
+          )
         },
       })
       this.uploadedParts++
@@ -293,12 +306,19 @@ export abstract class BufferedPartSink {
         await this.writeDeadLetter(header, seqStart, seqEnd, body)
       } catch (deadLetterError) {
         this.lastError = String(deadLetterError)
-        this.logger.warn(`dead-letter write for ${name} failed, dropping part: ${String(deadLetterError)}`)
+        this.logger.warn(
+          `dead-letter write for ${name} failed, dropping part: ${String(deadLetterError)}`,
+        )
       }
     }
   }
 
-  private async writeDeadLetter(header: SessionHeader, seqStart: number, seqEnd: number, body: string): Promise<void> {
+  private async writeDeadLetter(
+    header: SessionHeader,
+    seqStart: number,
+    seqEnd: number,
+    body: string,
+  ): Promise<void> {
     const dir = join(this.limits.deadLetterDir, projectKey(header.cwd), encodeSegment(header.id))
     await mkdir(dir, { recursive: true })
     await writeFile(join(dir, `${seqStart}-${seqEnd}.jsonl`), body, 'utf8')

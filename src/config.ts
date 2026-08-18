@@ -106,44 +106,48 @@ export interface Config {
 }
 
 const S3SinkSchema = z.object({
-    enabled: z.boolean().default(false),
-    mode: z.union([z.const('push' as const), z.const('ship' as const)]).default('push' as const),
-    bucket: z.string().default(''),
-    prefix: z.string().default('dsh-trajectories'),
-    region: z.string().default('us-east-1'),
-    endpoint: z.string(),
-    forcePathStyle: z.boolean(),
-    credentials: z.object({
+  enabled: z.boolean().default(false),
+  mode: z.union([z.const('push' as const), z.const('ship' as const)]).default('push' as const),
+  bucket: z.string().default(''),
+  prefix: z.string().default('dsh-trajectories'),
+  region: z.string().default('us-east-1'),
+  endpoint: z.string(),
+  forcePathStyle: z.boolean(),
+  credentials: z
+    .object({
       accessKeyId: z.string().required(),
       secretAccessKey: z.string().required(),
       // Object schemas default to `{}` in schemastery; reset to `undefined` so
       // absent credentials stay absent (AWS default chain) while a present but
       // incomplete object fails validation.
-    }).default(undefined as never),
-    batchSize: z.number().min(1).step(1).default(100),
-    maxBufferedEvents: z.number().min(1).step(1).default(10_000),
-    maxRetries: z.number().min(0).step(1).default(3),
-    retryBaseDelayMs: z.number().min(0).step(1).default(200),
-    deadLetterDir: z.string().default('.dsh/trajectory-deadletter'),
-    root: z.string().default(defaultShipRoot),
-    pollIntervalMs: z.number().min(1).step(1).default(5_000),
-    segmentBytes: z.number().min(1).step(1).default(262_144),
-    segmentMaxDelayMs: z.number().min(0).step(1).default(60_000),
-    dormantAfterMs: z.number().min(0).step(1).default(300_000),
-    writerId: z.string(),
-  })
+    })
+    .default(undefined as never),
+  batchSize: z.number().min(1).step(1).default(100),
+  maxBufferedEvents: z.number().min(1).step(1).default(10_000),
+  maxRetries: z.number().min(0).step(1).default(3),
+  retryBaseDelayMs: z.number().min(0).step(1).default(200),
+  deadLetterDir: z.string().default('.dsh/trajectory-deadletter'),
+  root: z.string().default(defaultShipRoot),
+  pollIntervalMs: z.number().min(1).step(1).default(5_000),
+  segmentBytes: z.number().min(1).step(1).default(262_144),
+  segmentMaxDelayMs: z.number().min(0).step(1).default(60_000),
+  dormantAfterMs: z.number().min(0).step(1).default(300_000),
+  writerId: z.string(),
+})
 
 const OtelSinkSchema = z.object({
   enabled: z.boolean().default(false),
   url: z.string().default(''),
-  aws: z.object({
-    region: z.string().required(),
-    url: z.string(),
-    service: z.string(),
-    // Object schemas default to `{}` in schemastery; reset to `undefined` so
-    // an absent `aws` stays absent (plain OTLP) while a present but incomplete
-    // object fails validation.
-  }).default(undefined as never),
+  aws: z
+    .object({
+      region: z.string().required(),
+      url: z.string(),
+      service: z.string(),
+      // Object schemas default to `{}` in schemastery; reset to `undefined` so
+      // an absent `aws` stays absent (plain OTLP) while a present but incomplete
+      // object fails validation.
+    })
+    .default(undefined as never),
   headers: z.dict(z.string()),
   serviceName: z.string().default('dsh-trajectory-persistence'),
   maxExportBatchSize: z.number().min(1).step(1).default(512),
@@ -166,9 +170,12 @@ export const Config: z<Config> = z.object({
  */
 export function validateConfig(config: Config): void {
   const { s3, otel } = config.sinks
-  if (s3.enabled && !s3.bucket) throw new Error('sinks.s3.bucket is required when the s3 sink is enabled')
+  if (s3.enabled && !s3.bucket)
+    throw new Error('sinks.s3.bucket is required when the s3 sink is enabled')
   if (s3.enabled && s3.batchSize > s3.maxBufferedEvents) {
-    throw new Error(`sinks.s3.batchSize (${s3.batchSize}) must not exceed sinks.s3.maxBufferedEvents (${s3.maxBufferedEvents})`)
+    throw new Error(
+      `sinks.s3.batchSize (${s3.batchSize}) must not exceed sinks.s3.maxBufferedEvents (${s3.maxBufferedEvents})`,
+    )
   }
   if (s3.enabled && s3.mode === 'ship' && !s3.root) {
     throw new Error('sinks.s3.root is required when the s3 sink runs in ship mode')
@@ -177,7 +184,9 @@ export function validateConfig(config: Config): void {
     throw new Error('sinks.otel.url or sinks.otel.aws is required when the otel sink is enabled')
   }
   if (otel.url && otel.aws) {
-    throw new Error('sinks.otel.url and sinks.otel.aws are mutually exclusive (aws already implies its endpoint)')
+    throw new Error(
+      'sinks.otel.url and sinks.otel.aws are mutually exclusive (aws already implies its endpoint)',
+    )
   }
   if (otel.aws && !otel.aws.region) {
     throw new Error('sinks.otel.aws.region is required when aws delivery is configured')

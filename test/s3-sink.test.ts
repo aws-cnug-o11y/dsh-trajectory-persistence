@@ -29,7 +29,10 @@ class MockUploader implements ObjectUploader {
   }
 }
 
-function config(overrides: Partial<S3SinkConfig> = {}, deadLetterDir = '/nonexistent-deadletter'): S3SinkConfig {
+function config(
+  overrides: Partial<S3SinkConfig> = {},
+  deadLetterDir = '/nonexistent-deadletter',
+): S3SinkConfig {
   return {
     enabled: true,
     mode: 'push',
@@ -87,7 +90,12 @@ describe('S3TrajectorySink', () => {
     const lines = body.trimEnd().split('\n')
     expect(lines).toHaveLength(4) // header + 3 events
     const header = JSON.parse(lines[0])
-    expect(header).toMatchObject({ type: 'session', id: 'sess-1', cwd: '/repo/my-project', delegationDepth: 0 })
+    expect(header).toMatchObject({
+      type: 'session',
+      id: 'sess-1',
+      cwd: '/repo/my-project',
+      delegationDepth: 0,
+    })
     const event = JSON.parse(lines[1])
     expect(event).toMatchObject({ type: 'turn/start', seq: 0 })
   })
@@ -261,8 +269,14 @@ describe('S3TrajectorySink', () => {
   })
 
   it('rejects batchSize greater than maxBufferedEvents', () => {
-    expect(() => new S3TrajectorySink(fakeCtx(), config({ batchSize: 10, maxBufferedEvents: 5 }), new MockUploader()))
-      .toThrow(/batchSize/)
+    expect(
+      () =>
+        new S3TrajectorySink(
+          fakeCtx(),
+          config({ batchSize: 10, maxBufferedEvents: 5 }),
+          new MockUploader(),
+        ),
+    ).toThrow(/batchSize/)
   })
 
   describe('stats()', () => {
@@ -316,7 +330,11 @@ describe('S3TrajectorySink', () => {
     it('counts events dropped by buffer overflow', async () => {
       const uploader = new MockUploader()
       // batchSize == capacity: the third push overflows before the async flush runs.
-      const sink = new S3TrajectorySink(fakeCtx(), config({ batchSize: 2, maxBufferedEvents: 2 }), uploader)
+      const sink = new S3TrajectorySink(
+        fakeCtx(),
+        config({ batchSize: 2, maxBufferedEvents: 2 }),
+        uploader,
+      )
       const session = fakeSession()
       sink.sessionCreated(session)
       for (const event of turnEvents([0, 1, 2])) sink.onEvent(session, event)
@@ -324,7 +342,9 @@ describe('S3TrajectorySink', () => {
       expect(sink.stats().droppedEvents).toBe(1)
       await sink.close()
       // The surviving two events uploaded as one part.
-      expect(uploader.puts.map(p => p.key)).toEqual(['dsh-trajectories/--repo-my-project--/sess-1/1-2.jsonl'])
+      expect(uploader.puts.map(p => p.key)).toEqual([
+        'dsh-trajectories/--repo-my-project--/sess-1/1-2.jsonl',
+      ])
       expect(sink.stats().droppedEvents).toBe(1)
       expect(sink.stats().uploadedParts).toBe(1)
     })

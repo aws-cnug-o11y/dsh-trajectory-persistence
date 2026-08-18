@@ -122,7 +122,7 @@ export function updateSessionState(
     ...current,
     lastSize: observed.size,
     lastMtimeNs: observed.mtimeNs,
-    ...observed.dormant !== undefined ? { dormant: observed.dormant } : {},
+    ...(observed.dormant !== undefined ? { dormant: observed.dormant } : {}),
   }
   if (observed.size < current.uploadedOffset) next.conflicted = true
   state.sessions[sessionId] = next
@@ -138,7 +138,11 @@ export function updateSessionState(
  * @param uploadedOffset - new exclusive uploaded offset (must not regress).
  * @returns the updated session progress.
  */
-export function advanceSessionOffset(state: ShipState, sessionId: string, uploadedOffset: number): SessionShipState {
+export function advanceSessionOffset(
+  state: ShipState,
+  sessionId: string,
+  uploadedOffset: number,
+): SessionShipState {
   const current = state.sessions[sessionId] ?? initialSessionState()
   if (uploadedOffset < current.uploadedOffset) {
     throw new Error(

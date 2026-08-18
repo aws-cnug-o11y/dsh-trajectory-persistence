@@ -110,7 +110,9 @@ async function main(argv: string[]): Promise<number> {
     return 0
   }
   if (args.command !== 'sync-down') {
-    process.stderr.write(`error: ${args.command === undefined ? 'no subcommand given' : `unknown subcommand ${args.command}`}\n\n${HELP}`)
+    process.stderr.write(
+      `error: ${args.command === undefined ? 'no subcommand given' : `unknown subcommand ${args.command}`}\n\n${HELP}`,
+    )
     return 1
   }
   if (!args.bucket) {
@@ -121,8 +123,8 @@ async function main(argv: string[]): Promise<number> {
   const store = createS3ObjectStore({
     bucket: args.bucket,
     region: args.region ?? 'us-east-1',
-    ...args.endpoint !== undefined ? { endpoint: args.endpoint } : {},
-    ...args.forcePathStyle !== undefined ? { forcePathStyle: args.forcePathStyle } : {},
+    ...(args.endpoint !== undefined ? { endpoint: args.endpoint } : {}),
+    ...(args.forcePathStyle !== undefined ? { forcePathStyle: args.forcePathStyle } : {}),
     // No static credentials here: the AWS default provider chain resolves them.
   })
   try {
@@ -131,14 +133,16 @@ async function main(argv: string[]): Promise<number> {
       bucket: args.bucket,
       prefix: args.prefix ?? 'dsh-trajectories',
       root: args.root ?? defaultRoot(),
-      ...args.session !== undefined ? { sessionId: args.session } : {},
-      ...args.force !== undefined ? { force: args.force } : {},
+      ...(args.session !== undefined ? { sessionId: args.session } : {}),
+      ...(args.force !== undefined ? { force: args.force } : {}),
       log: line => process.stdout.write(`${line}\n`),
     })
     if (summary.sessions.length === 0) {
-      process.stderr.write(args.session !== undefined
-        ? `no manifest found for session ${args.session}\n`
-        : 'no shipped sessions found under the prefix\n')
+      process.stderr.write(
+        args.session !== undefined
+          ? `no manifest found for session ${args.session}\n`
+          : 'no shipped sessions found under the prefix\n',
+      )
       return 1
     }
     const counts = new Map<string, number>()
@@ -156,7 +160,9 @@ async function main(argv: string[]): Promise<number> {
 }
 
 main(process.argv.slice(2)).then(
-  code => { process.exitCode = code },
+  code => {
+    process.exitCode = code
+  },
   error => {
     process.stderr.write(`sync-down failed: ${String(error)}\n`)
     process.exitCode = 1

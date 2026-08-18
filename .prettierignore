@@ -1,0 +1,7 @@
+node_modules/
+lib/
+.pnpm-store/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+pnpm-lock.yaml
+*.md
