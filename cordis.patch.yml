@@ -1,0 +1,24 @@
+# cordis bundle patch for dsh-trajectory-persistence.
+#
+# Mount into a dsh profile with:
+#   dsh plugin add dsh-trajectory-persistence
+# or reference it from your profile's cordis.patch.yml:
+#
+#   - insert:
+#       - id: trajectory-persistence
+#         name: dsh-trajectory-persistence
+#         config:
+#           sinks:
+#             s3:
+#               enabled: true
+#               bucket: my-trajectory-bucket
+#             otel:
+#               enabled: true
+#               url: http://localhost:4318/v1/traces
+#
+# All sinks are DISABLED by default: inserting the row without config
+# loads the plugin as a no-op (it warns once and subscribes nothing).
+
+- insert:
+    - id: trajectory-persistence
+      name: dsh-trajectory-persistence
