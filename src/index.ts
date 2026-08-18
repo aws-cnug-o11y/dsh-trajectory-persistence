@@ -38,6 +38,8 @@ export { S3TrajectorySink, EventBuffer, createS3Uploader } from './s3-sink.js'
 export type { ObjectUploader, S3SinkStats } from './s3-sink.js'
 export { OtelTrajectorySink, GenAISpanMapper } from './otel-sink.js'
 export type { OtelSinkStats } from './otel-sink.js'
+export { SigV4OtlpTraceExporter, defaultAwsOtlpUrl } from './sigv4-otlp-exporter.js'
+export type { SigV4Credentials, SigV4OtlpTraceExporterConfig } from './sigv4-otlp-exporter.js'
 export { withRetry } from './retry.js'
 export { toHeaderLine, encodeSegment, projectKey, serializePart } from './jsonl.js'
 

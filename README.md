@@ -11,8 +11,9 @@ and persists every session's trajectory to two **independently toggleable** sink
   exponential-backoff retry, and a local dead-letter directory.
 - **OTel GenAI sink** — spans following the
   [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/),
-  exported over OTLP HTTP/protobuf straight to Jaeger, or to an OTel Collector
-  (which can land them in ClickHouse, …).
+  exported over OTLP HTTP/protobuf straight to Jaeger, to an OTel Collector
+  (which can land them in ClickHouse, …), or SigV4-signed to AWS CloudWatch /
+  Bedrock AgentCore Observability.
 
 > **Compatibility notice.** The DeepSeek Harness is in developer preview with no
 > compatibility guarantees. This plugin was built and verified against monorepo
@@ -40,6 +41,7 @@ flowchart LR
     S3S -->|final failure| DL[(local dead-letter dir)]
     OTS -->|OTLP HTTP/protobuf| J[Jaeger :4318]
     OTS -->|OTLP HTTP/protobuf| C[OTel Collector]
+    OTS -->|OTLP + SigV4| CW[(CloudWatch / AgentCore Observability)]
     C -->|clickhouse exporter| CH[(ClickHouse)]
 ```
 
@@ -143,7 +145,8 @@ open spans are ended and flushed — so no trajectory data is lost on a switch.
 New session events go to the new sink immediately. A rebuild whose config the
 sink cannot use keeps the previous sink running and logs a warning; a write
 that violates the cross-field rules (`sinks.s3.enabled` without `bucket`,
-`batchSize > maxBufferedEvents`, `sinks.otel.enabled` without `url`) is refused
+`batchSize > maxBufferedEvents`, `sinks.otel.enabled` without `url` or `aws`,
+`sinks.otel.url` together with `sinks.otel.aws`) is refused
 upfront by the namespace's validate hook, before anything persists. If the
 settings service itself goes away, the plugin falls back to the composed
 config.
@@ -189,7 +192,8 @@ config:
       deadLetterDir: .dsh/trajectory-deadletter
     otel:
       enabled: false
-      url: ''                           # full OTLP traces endpoint, e.g. http://jaeger:4318/v1/traces
+      url: ''                           # full OTLP traces endpoint, e.g. http://jaeger:4318/v1/traces (mutually exclusive with aws)
+      aws: ~                            # { region, url?, service? }; SigV4-signed OTLP to CloudWatch / AgentCore
       headers: ~                        # extra HTTP headers (auth, …)
       serviceName: dsh-trajectory-persistence
       maxExportBatchSize: 512           # BatchSpanProcessor
@@ -242,6 +246,41 @@ config:
       enabled: true
       url: http://localhost:4318/v1/traces
 ```
+
+### AWS CloudWatch / Bedrock AgentCore Observability (SigV4)
+
+Instead of a plain OTLP endpoint, the otel sink can sign each batch with
+AWS SigV4 and POST it straight to the
+[CloudWatch OTLP endpoint](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-OTLPEndpoint.html)
+(`https://xray.<region>.amazonaws.com/v1/traces`, service name `xray`) — the
+same ingest path Bedrock AgentCore Observability uses. Spans land in the
+CloudWatch `aws/spans` log group, and the standard `gen_ai.*` span attributes
+this sink already emits are recognized by the CloudWatch GenAI observability
+dashboard (enable **Transaction Search** in CloudWatch to see them).
+
+```yaml
+config:
+  sinks:
+    otel:
+      enabled: true
+      aws:
+        region: us-west-2
+        # url: ~      # endpoint override — VPC endpoint or another partition
+                        # (e.g. https://xray.cn-north-1.amazonaws.com.cn/v1/traces)
+        # service: ~  # SigV4 service name override; defaults to xray
+```
+
+`aws` is mutually exclusive with `url`, and `aws.region` is required.
+Credentials come from the **AWS default provider chain** — nothing to put in
+the config. For static credentials, use the environment:
+
+```sh
+export AWS_ACCESS_KEY_ID=<your-access-key-id>
+export AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+# export AWS_SESSION_TOKEN=<your-session-token>   # only for temporary credentials
+```
+
+Extra entries in `headers` are merged into the signed request as usual.
 
 ### OTel Collector → ClickHouse
 
@@ -349,8 +388,10 @@ Layout:
 │   ├── sink-utils.ts    # EventBuffer (ring) + BufferedPartSink (batch/retry/dead-letter, stats())
 │   ├── s3-sink.ts       # S3TrajectorySink: S3 transport (uploader + key layout) over BufferedPartSink
 │   ├── otel-sink.ts     # GenAISpanMapper (pure mapping) + OtelTrajectorySink (OTLP pipeline)
+│   ├── sigv4-otlp-exporter.ts # SigV4-signed OTLP exporter: CloudWatch / AgentCore Observability
 │   └── retry.ts         # exponential backoff helper
-└── test/                # vitest: otel-map, s3-sink, sinks (rebuild), retry, integration (real cordis ctx)
+└── test/                # vitest: otel-map, sigv4-otlp-exporter, config, s3-sink, sinks (rebuild),
+                         #   retry, integration (real cordis ctx)
 ```
 
 ## Notes & caveats

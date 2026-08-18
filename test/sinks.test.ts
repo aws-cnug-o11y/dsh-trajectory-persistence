@@ -178,6 +178,23 @@ describe('TrajectorySinks', () => {
     await sinks.close()
   })
 
+  it('rebuilds only the otel sink when aws.region changes', async () => {
+    const built = { s3: [] as SinkSpy[], otel: [] as SinkSpy[] }
+    const sinks = new TrajectorySinks(
+      fakeCtx(),
+      config(s3Config(), otelConfig({ url: '', aws: { region: 'us-east-1' } })),
+      spyingFactories(built),
+    )
+
+    sinks.reconfigure(config(s3Config(), otelConfig({ url: '', aws: { region: 'eu-central-1' } })))
+
+    expect(built.otel).toHaveLength(2)
+    expect(built.s3).toHaveLength(1)
+    await waitFor(() => expect(built.otel[0].closeCount).toBe(1))
+    expect(built.s3[0].closeCount).toBe(0)
+    await sinks.close()
+  })
+
   it('keeps the previous sink when a rebuild fails', () => {
     const built = { s3: [] as SinkSpy[], otel: [] as SinkSpy[] }
     const factories = spyingFactories(built)
