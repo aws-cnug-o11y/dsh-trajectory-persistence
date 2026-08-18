@@ -34,12 +34,31 @@ export interface S3SinkConfig {
   deadLetterDir: string
 }
 
+/** AWS delivery of the OTel GenAI sink: SigV4-signed OTLP to CloudWatch / Bedrock AgentCore Observability. */
+export interface OtelAwsConfig {
+  /** AWS region of the endpoint (and the signing region). */
+  region: string
+  /**
+   * Full OTLP traces endpoint; defaults to `https://xray.{region}.amazonaws.com/v1/traces`.
+   * Override for VPC endpoints or partitions with a different domain (e.g. `amazonaws.com.cn`).
+   */
+  url?: string
+  /** SigV4 service name; `xray` for the CloudWatch OTLP endpoint. */
+  service?: string
+}
+
 /** OTel GenAI span sink configuration. */
 export interface OtelSinkConfig {
   /** Master switch for this sink. */
   enabled: boolean
-  /** Full OTLP HTTP/protobuf traces endpoint (e.g. `http://localhost:4318/v1/traces`). */
+  /** Full OTLP HTTP/protobuf traces endpoint (e.g. `http://localhost:4318/v1/traces`). Mutually exclusive with `aws`. */
   url: string
+  /**
+   * AWS delivery: SigV4-signed OTLP to CloudWatch / Bedrock AgentCore
+   * Observability instead of a plain OTLP endpoint. Credentials come from
+   * the AWS default provider chain (env, shared config, IAM role).
+   */
+  aws?: OtelAwsConfig
   /** Extra OTLP HTTP headers (e.g. auth). */
   headers?: Record<string, string>
   /** `service.name` resource attribute of exported spans. */
@@ -83,6 +102,14 @@ const S3SinkSchema = z.object({
 const OtelSinkSchema = z.object({
   enabled: z.boolean().default(false),
   url: z.string().default(''),
+  aws: z.object({
+    region: z.string().required(),
+    url: z.string(),
+    service: z.string(),
+    // Object schemas default to `{}` in schemastery; reset to `undefined` so
+    // an absent `aws` stays absent (plain OTLP) while a present but incomplete
+    // object fails validation.
+  }).default(undefined as never),
   headers: z.dict(z.string()),
   serviceName: z.string().default('dsh-trajectory-persistence'),
   maxExportBatchSize: z.number().min(1).step(1).default(512),
@@ -109,7 +136,13 @@ export function validateConfig(config: Config): void {
   if (s3.enabled && s3.batchSize > s3.maxBufferedEvents) {
     throw new Error(`sinks.s3.batchSize (${s3.batchSize}) must not exceed sinks.s3.maxBufferedEvents (${s3.maxBufferedEvents})`)
   }
-  if (otel.enabled && !otel.url) {
-    throw new Error('sinks.otel.url is required when the otel sink is enabled (the full OTLP traces endpoint)')
+  if (otel.enabled && !otel.url && !otel.aws) {
+    throw new Error('sinks.otel.url or sinks.otel.aws is required when the otel sink is enabled')
+  }
+  if (otel.url && otel.aws) {
+    throw new Error('sinks.otel.url and sinks.otel.aws are mutually exclusive (aws already implies its endpoint)')
+  }
+  if (otel.aws && !otel.aws.region) {
+    throw new Error('sinks.otel.aws.region is required when aws delivery is configured')
   }
 }

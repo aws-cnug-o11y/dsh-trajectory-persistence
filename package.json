@@ -50,29 +50,35 @@
     }
   },
   "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-commands": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-session": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/credential-providers": "^3.1112.0",
     "@deepseek-ai/schemastery": "^3.18.1",
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/core": "^2.10.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.220.0",
+    "@opentelemetry/otlp-transformer": "^0.220.0",
     "@opentelemetry/resources": "^2.9.0",
     "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/sdk-trace-node": "^2.9.0",
-    "@opentelemetry/semantic-conventions": "^1.43.0"
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@smithy/core": "^3.33.0",
+    "@smithy/protocol-http": "^5.6.2",
+    "@smithy/signature-v4": "^5.7.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-commands": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-session": "^0.1.0-rc.6",
     "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
     "@types/node": "^22.10.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
-    "@deepseek-ai/cordis": "^4.0.1"
+    "vitest": "^3.0.0"
   },
   "engines": {
     "node": ">=22"

@@ -27,6 +27,7 @@ import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { OtelSinkConfig } from './config.js'
+import { SigV4OtlpTraceExporter } from './sigv4-otlp-exporter.js'
 
 /** Attribute ceiling for raw tool-call arguments on a span. */
 const MAX_ARGUMENTS_ATTRIBUTE_BYTES = 8192
@@ -279,18 +280,31 @@ export class OtelTrajectorySink {
     private readonly config: OtelSinkConfig,
     exporter?: SpanExporter,
   ) {
-    if (!config.url && !exporter) {
-      throw new Error('otel sink: url is required when the otel sink is enabled (the full OTLP traces endpoint)')
+    if (!config.url && !config.aws && !exporter) {
+      throw new Error('otel sink: url or aws is required when the otel sink is enabled')
+    }
+    if (config.url && config.aws) {
+      throw new Error('otel sink: url and aws are mutually exclusive (aws already implies its endpoint)')
+    }
+    if (config.aws && !config.aws.region) {
+      throw new Error('otel sink: aws.region is required when aws delivery is configured')
     }
     if (!Number.isInteger(config.maxExportBatchSize) || config.maxExportBatchSize < 1) {
       throw new Error(`otel sink: maxExportBatchSize must be a positive integer, got ${String(config.maxExportBatchSize)}`)
     }
     this.logger = ctx.logger('dsh-trajectory-persistence/otel')
     this.processor = new BatchSpanProcessor(
-      exporter ?? new OTLPTraceExporter({
-        url: config.url,
-        ...config.headers !== undefined ? { headers: config.headers } : {},
-      }),
+      exporter ?? (config.aws
+        ? new SigV4OtlpTraceExporter({
+          region: config.aws.region,
+          ...config.aws.url !== undefined ? { url: config.aws.url } : {},
+          ...config.aws.service !== undefined ? { service: config.aws.service } : {},
+          ...config.headers !== undefined ? { headers: config.headers } : {},
+        })
+        : new OTLPTraceExporter({
+          url: config.url,
+          ...config.headers !== undefined ? { headers: config.headers } : {},
+        })),
       {
         maxExportBatchSize: config.maxExportBatchSize,
         scheduledDelayMillis: config.scheduledDelayMillis,
