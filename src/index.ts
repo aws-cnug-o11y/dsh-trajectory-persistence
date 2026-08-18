@@ -42,6 +42,33 @@ export { SigV4OtlpTraceExporter, defaultAwsOtlpUrl } from './sigv4-otlp-exporter
 export type { SigV4Credentials, SigV4OtlpTraceExporterConfig } from './sigv4-otlp-exporter.js'
 export { withRetry } from './retry.js'
 export { toHeaderLine, encodeSegment, projectKey, serializePart } from './jsonl.js'
+export { scanZstdFrames } from './zstd-scan.js'
+export type { ZstdFrameRange, ZstdFrameScan } from './zstd-scan.js'
+export {
+  MANIFEST_VERSION,
+  ManifestError,
+  segmentKey,
+  manifestKey,
+  parseManifest,
+  serializeManifest,
+  readManifest,
+  writeManifest,
+  updateManifest,
+  getOrCreateWriterId,
+} from './manifest.js'
+export type { ManifestSegment, ShipManifest, ObjectStore } from './manifest.js'
+export {
+  SHIP_STATE_FILE,
+  defaultShipStateDir,
+  initialSessionState,
+  loadShipState,
+  saveShipState,
+  getSessionState,
+  updateSessionState,
+  advanceSessionOffset,
+} from './ship-state.js'
+export type { SessionShipState, ShipState } from './ship-state.js'
+export type { S3SinkMode } from './config.js'
 
 export function apply(ctx: Context, config: Config) {
   // Invalid composed config (e.g. a sink enabled without its bucket/url)

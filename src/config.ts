@@ -6,10 +6,25 @@
 
 import z from '@deepseek-ai/schemastery'
 
+/** Delivery mode of the S3 sink. */
+export type S3SinkMode = 'push' | 'ship'
+
+/**
+ * Default session root scanned in ship mode: `$DSH_HOME/sessions` when
+ * `DSH_HOME` is set, else `~/.dsh/sessions`. Computed once at module load.
+ */
+const defaultShipRoot = `${process.env.DSH_HOME ?? `${process.env.HOME ?? '~'}/.dsh`}/sessions`
+
 /** S3 / S3-compatible (OSS, MinIO) sink configuration. */
 export interface S3SinkConfig {
   /** Master switch for this sink. */
   enabled: boolean
+  /**
+   * Delivery mode: `push` buffers live events and uploads JSONL parts;
+   * `ship` tails the official jsonl persistence backend's on-disk artifact
+   * and uploads byte-aligned zstd frame segments plus a per-session manifest.
+   */
+  mode: S3SinkMode
   /** Target bucket. */
   bucket: string
   /** Key prefix; parts land at `{prefix}/{projectId}/{sessionId}/{seqStart}-{seqEnd}.jsonl`. */
@@ -32,6 +47,18 @@ export interface S3SinkConfig {
   retryBaseDelayMs: number
   /** Local directory receiving parts whose upload finally failed (dead letter). */
   deadLetterDir: string
+  /** Ship mode: root directory of the official jsonl backend's session artifacts. */
+  root: string
+  /** Ship mode: poll interval for artifact growth, in milliseconds. */
+  pollIntervalMs: number
+  /** Ship mode: target segment size in bytes (segments never split a zstd frame). */
+  segmentBytes: number
+  /** Ship mode: ship a short segment after this many milliseconds without growth. */
+  segmentMaxDelayMs: number
+  /** Ship mode: mark a session dormant after this many milliseconds without change. */
+  dormantAfterMs: number
+  /** Ship mode: stable writer identity override; defaults to the persisted per-machine id. */
+  writerId?: string
 }
 
 /** AWS delivery of the OTel GenAI sink: SigV4-signed OTLP to CloudWatch / Bedrock AgentCore Observability. */
@@ -80,6 +107,7 @@ export interface Config {
 
 const S3SinkSchema = z.object({
     enabled: z.boolean().default(false),
+    mode: z.union([z.const('push' as const), z.const('ship' as const)]).default('push' as const),
     bucket: z.string().default(''),
     prefix: z.string().default('dsh-trajectories'),
     region: z.string().default('us-east-1'),
@@ -97,6 +125,12 @@ const S3SinkSchema = z.object({
     maxRetries: z.number().min(0).step(1).default(3),
     retryBaseDelayMs: z.number().min(0).step(1).default(200),
     deadLetterDir: z.string().default('.dsh/trajectory-deadletter'),
+    root: z.string().default(defaultShipRoot),
+    pollIntervalMs: z.number().min(1).step(1).default(5_000),
+    segmentBytes: z.number().min(1).step(1).default(262_144),
+    segmentMaxDelayMs: z.number().min(0).step(1).default(60_000),
+    dormantAfterMs: z.number().min(0).step(1).default(300_000),
+    writerId: z.string(),
   })
 
 const OtelSinkSchema = z.object({
@@ -135,6 +169,9 @@ export function validateConfig(config: Config): void {
   if (s3.enabled && !s3.bucket) throw new Error('sinks.s3.bucket is required when the s3 sink is enabled')
   if (s3.enabled && s3.batchSize > s3.maxBufferedEvents) {
     throw new Error(`sinks.s3.batchSize (${s3.batchSize}) must not exceed sinks.s3.maxBufferedEvents (${s3.maxBufferedEvents})`)
+  }
+  if (s3.enabled && s3.mode === 'ship' && !s3.root) {
+    throw new Error('sinks.s3.root is required when the s3 sink runs in ship mode')
   }
   if (otel.enabled && !otel.url && !otel.aws) {
     throw new Error('sinks.otel.url or sinks.otel.aws is required when the otel sink is enabled')

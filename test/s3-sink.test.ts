@@ -32,6 +32,7 @@ class MockUploader implements ObjectUploader {
 function config(overrides: Partial<S3SinkConfig> = {}, deadLetterDir = '/nonexistent-deadletter'): S3SinkConfig {
   return {
     enabled: true,
+    mode: 'push',
     bucket: 'bucket-1',
     prefix: 'dsh-trajectories',
     region: 'us-east-1',
@@ -40,6 +41,11 @@ function config(overrides: Partial<S3SinkConfig> = {}, deadLetterDir = '/nonexis
     maxRetries: 2,
     retryBaseDelayMs: 1,
     deadLetterDir,
+    root: '/nonexistent-sessions',
+    pollIntervalMs: 5_000,
+    segmentBytes: 262_144,
+    segmentMaxDelayMs: 60_000,
+    dormantAfterMs: 300_000,
     ...overrides,
   }
 }

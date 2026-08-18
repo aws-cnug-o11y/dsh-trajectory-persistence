@@ -21,6 +21,7 @@ class MockUploader implements ObjectUploader {
 function s3Config(overrides: Partial<S3SinkConfig> = {}): S3SinkConfig {
   return {
     enabled: true,
+    mode: 'push',
     bucket: 'bucket-1',
     prefix: 'dsh-trajectories',
     region: 'us-east-1',
@@ -29,6 +30,11 @@ function s3Config(overrides: Partial<S3SinkConfig> = {}): S3SinkConfig {
     maxRetries: 0,
     retryBaseDelayMs: 1,
     deadLetterDir: '/nonexistent-deadletter',
+    root: '/nonexistent-sessions',
+    pollIntervalMs: 5_000,
+    segmentBytes: 262_144,
+    segmentMaxDelayMs: 60_000,
+    dormantAfterMs: 300_000,
     ...overrides,
   }
 }
