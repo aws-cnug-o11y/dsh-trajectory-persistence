@@ -22,10 +22,17 @@ Requires Node.js ≥ 22 (matching the harness).
 │   ├── jsonl.ts         # jsonl-persistence-compatible header line, projectKey, encodeSegment
 │   ├── sink-utils.ts    # EventBuffer (ring) + BufferedPartSink (batch/retry/dead-letter, stats())
 │   ├── s3-sink.ts       # S3TrajectorySink: S3 transport (uploader + key layout) over BufferedPartSink
+│   ├── zstd-scan.ts     # vendored scanZstdFrames (complete-frame ranges + torn-tail detection)
+│   ├── manifest.ts      # _manifest.json format, segment keys, RMW updates, writerId
+│   ├── ship-state.ts    # local ship watermarks (per-session offset, revision, conflicted)
+│   ├── shipper.ts       # S3ShipperSink (mode: 'ship'): read-only tailer of the jsonl backend root
+│   ├── sync-down.ts     # restore local artifacts from shipped segments (no-overwrite publish)
+│   ├── cli.ts           # bin entry: `dsh-trajectory-persistence sync-down`
 │   ├── otel-sink.ts     # GenAISpanMapper (pure mapping) + OtelTrajectorySink (OTLP pipeline)
 │   ├── sigv4-otlp-exporter.ts # SigV4-signed OTLP exporter: CloudWatch / AgentCore Observability
 │   └── retry.ts         # exponential backoff helper
-└── test/                # vitest: otel-map, sigv4-otlp-exporter, config, s3-sink, sinks (rebuild),
+└── test/                # vitest: otel-map, sigv4-otlp-exporter, config, s3-sink, shipper,
+                         #   zstd-scan, manifest, ship-state, sync-down, sinks (rebuild),
                          #   retry, integration (real cordis ctx)
 ```
 
