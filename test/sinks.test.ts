@@ -1,9 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base'
 import { TrajectorySinks } from '../src/sinks.js'
 import type { SinkFactories } from '../src/sinks.js'
 import { S3TrajectorySink } from '../src/s3-sink.js'
 import type { ObjectUploader } from '../src/s3-sink.js'
+import { S3ShipperSink } from '../src/shipper.js'
+import type { ObjectStore } from '../src/manifest.js'
 import { OtelTrajectorySink } from '../src/otel-sink.js'
 import type { Config, OtelSinkConfig, S3SinkConfig } from '../src/config.js'
 import { ev, fakeCtx, fakeSession, resetClock } from './helpers.js'
@@ -236,5 +241,88 @@ describe('TrajectorySinks', () => {
 
     const unmanaged = sinks.statusText(false)
     expect(unmanaged).toContain('no settings service mounted')
+  })
+})
+
+
+class MemoryStore implements ObjectStore {
+  readonly objects = new Map<string, Buffer>()
+  async getObject(key: string): Promise<Buffer | null> {
+    return this.objects.get(key) ?? null
+  }
+  async putObject(key: string, body: Buffer | string): Promise<void> {
+    this.objects.set(key, Buffer.isBuffer(body) ? body : Buffer.from(body))
+  }
+}
+
+describe('TrajectorySinks ship mode', () => {
+  it('builds S3ShipperSink via the default factory when mode is ship', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-sinks-ship-'))
+    const previous = process.env.DSH_HOME
+    process.env.DSH_HOME = home // defaultShipStateDir() resolves under DSH_HOME
+    try {
+      const sinks = new TrajectorySinks(
+        fakeCtx(),
+        config(s3Config({ mode: 'ship', root: join(home, 'sessions'), pollIntervalMs: 3_600_000 })),
+      )
+      const status = sinks.status()
+      expect(status.s3.enabled).toBe(true)
+      expect(status.s3.enabled && 'mode' in status.s3 && status.s3.mode).toBe('ship')
+      expect(status.s3.enabled && 'mode' in status.s3 && status.s3.trackedSessions).toBe(0)
+      const text = sinks.statusText(false)
+      expect(text).toContain('s3 sink: enabled (mode: ship)')
+      expect(text).toContain('tracked sessions: 0 (0 dormant)')
+      expect(text).toContain('conflicted sessions: none')
+      await sinks.close()
+    } finally {
+      if (previous === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previous
+      await rm(home, { recursive: true, force: true })
+    }
+  })
+
+  it('rebuilds the s3 sink when the mode flips between push and ship', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'dsh-sinks-flip-'))
+    try {
+      interface S3Spy { kind: 'push' | 'ship'; closeCount: number }
+      const built: S3Spy[] = []
+      const factories: SinkFactories = {
+        s3: (ctx, cfg) => {
+          const spy: S3Spy = { kind: cfg.mode === 'ship' ? 'ship' : 'push', closeCount: 0 }
+          const sink = cfg.mode === 'ship'
+            ? new S3ShipperSink(ctx, cfg, new MemoryStore(), join(home, 'state'))
+            : new S3TrajectorySink(ctx, cfg, new MockUploader())
+          const close = sink.close.bind(sink)
+          sink.close = async () => {
+            spy.closeCount++
+            await close()
+          }
+          built.push(spy)
+          return sink
+        },
+        otel: (ctx, cfg) => new OtelTrajectorySink(ctx, cfg, new InMemorySpanExporter()),
+      }
+      const shipRoot = join(home, 'sessions')
+      const sinks = new TrajectorySinks(fakeCtx(), config(s3Config()), factories)
+      expect(built.map(spy => spy.kind)).toEqual(['push'])
+
+      // push -> ship: full config change rebuilds, the push sink drains.
+      sinks.reconfigure(config(s3Config({ mode: 'ship', root: shipRoot, pollIntervalMs: 3_600_000 })))
+      expect(built.map(spy => spy.kind)).toEqual(['push', 'ship'])
+      await waitFor(() => expect(built[0].closeCount).toBe(1))
+      expect(built[1].closeCount).toBe(0)
+      const status = sinks.status()
+      expect(status.s3.enabled && 'mode' in status.s3 && status.s3.mode).toBe('ship')
+
+      // ship -> push: rebuilt again, the shipper is closed (final flush inside).
+      sinks.reconfigure(config(s3Config()))
+      expect(built.map(spy => spy.kind)).toEqual(['push', 'ship', 'push'])
+      await waitFor(() => expect(built[1].closeCount).toBe(1))
+      expect(built[2].closeCount).toBe(0)
+      expect(sinks.status().s3.enabled && !('mode' in sinks.status().s3)).toBe(true)
+      await sinks.close()
+    } finally {
+      await rm(home, { recursive: true, force: true })
+    }
   })
 })

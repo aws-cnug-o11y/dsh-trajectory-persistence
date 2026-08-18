@@ -33,9 +33,11 @@ export const namespace = settingsNamespace('trajectory-persistence')
 export { Config, validateConfig }
 export type { Config as TrajectoryPersistenceConfig } from './config.js'
 export { TrajectorySinks } from './sinks.js'
-export type { SinkFactories, TrajectoryStatus } from './sinks.js'
+export type { S3Sink, S3Stats, SinkFactories, TrajectoryStatus } from './sinks.js'
 export { S3TrajectorySink, EventBuffer, createS3Uploader } from './s3-sink.js'
 export type { ObjectUploader, S3SinkStats } from './s3-sink.js'
+export { S3ShipperSink, createS3ObjectStore } from './shipper.js'
+export type { ShipperStats, S3ObjectStore } from './shipper.js'
 export { OtelTrajectorySink, GenAISpanMapper } from './otel-sink.js'
 export type { OtelSinkStats } from './otel-sink.js'
 export { SigV4OtlpTraceExporter, defaultAwsOtlpUrl } from './sigv4-otlp-exporter.js'
