@@ -1,0 +1,14 @@
+# pnpm settings (reference: https://pnpm.io/settings).
+#
+# pnpm >= 10.34 / 11 refuse to resolve packages published less than
+# minimumReleaseAge minutes ago (default 1440 = 24h) as a supply-chain
+# safeguard. This plugin deliberately tracks fast-moving @aws-sdk/* and
+# @deepseek-ai/* releases, so the cooldown is disabled here to keep installs
+# and CI deterministic (a freshly published dependency would otherwise block
+# `pnpm install --frozen-lockfile` for up to a day).
+minimumReleaseAge: 0
+
+# Build scripts pnpm is allowed to run (pnpm >= 10 blocks dependency
+# postinstall scripts by default). esbuild's postinstall verifies its binary.
+allowBuilds:
+  esbuild: true
