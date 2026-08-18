@@ -1,4 +1,17 @@
-# S3 / OSS Sink
+# S3
+
+Minimal configuration to start persisting trajectories to AWS S3 (credentials
+fall back to the AWS default provider chain when omitted):
+
+```yaml
+config:
+  sinks:
+    s3:
+      enabled: true
+      bucket: dsh-trajectories
+      prefix: trajectories
+      region: us-east-1
+```
 
 The S3 sink persists each session's trajectory as JSONL **part files** to AWS
 S3 or any S3-compatible object store (Aliyun OSS, MinIO, …), byte-compatible
